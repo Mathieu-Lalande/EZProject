@@ -31,6 +31,9 @@ public class AccountStatusFilter extends OncePerRequestFilter {
     private static final Set<String> ALLOWED_WHILE_PASSWORD_CHANGE = Set.of(
             "GET /api/auth/me", "PUT /api/account/password", "POST /api/auth/logout");
 
+    private static final Set<String> ALLOWED_WHILE_MFA_PENDING = Set.of(
+            "POST /api/auth/mfa/verify", "POST /api/auth/logout");
+
     private final AppUserRepository users;
 
     public AccountStatusFilter(AppUserRepository users) {
@@ -58,6 +61,12 @@ public class AccountStatusFilter extends OncePerRequestFilter {
             }
             SecurityContextHolder.clearContext();
             write(response, HttpStatus.UNAUTHORIZED, "ACCOUNT_DISABLED", "Compte désactivé");
+            return;
+        }
+        HttpSession current = request.getSession(false);
+        if (current != null && current.getAttribute(com.ezproject.mfa.MfaService.PENDING_ATTRIBUTE) != null
+                && !ALLOWED_WHILE_MFA_PENDING.contains(request.getMethod() + " " + request.getRequestURI())) {
+            write(response, HttpStatus.UNAUTHORIZED, "MFA_REQUIRED", "Code de double authentification requis");
             return;
         }
         if (user.isMustChangePassword()

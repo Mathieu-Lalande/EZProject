@@ -8,6 +8,9 @@ spring:
       enabled: false
 
 app:
+  mfa:
+    # Clé de DÉVELOPPEMENT uniquement (publique dans le dépôt) : en production, fournir MFA_ENCRYPTION_KEY
+    encryption-key: ${MFA_ENCRYPTION_KEY:ZGV2LW9ubHktbWZhLWtleS1ub3QtZm9yLXByb2QtISE=}
   seed:
     enabled: true
     # Mot de passe des comptes de démonstration (dev uniquement). Surchargez via DEMO_PASSWORD.

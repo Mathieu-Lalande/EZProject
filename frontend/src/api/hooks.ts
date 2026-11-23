@@ -85,8 +85,17 @@ export function useLogin() {
     mutationFn: async ({ email, password }: { email: string; password: string }) => {
       // Une première requête GET garantit la présence du cookie XSRF-TOKEN
       await api.get('/api/auth/me').catch(() => undefined);
-      await api.postForm('/api/auth/login', new URLSearchParams({ email, password }));
+      const res = await api.postForm<{ mfaRequired?: boolean } | undefined>('/api/auth/login', new URLSearchParams({ email, password }));
+      return { mfaRequired: !!res?.mfaRequired };
     },
+    onSuccess: (r) => (r.mfaRequired ? undefined : qc.invalidateQueries({ queryKey: keys.me })),
+  });
+}
+
+export function useVerifyMfa() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (code: string) => api.post('/api/auth/mfa/verify', { code }),
     onSuccess: () => qc.invalidateQueries({ queryKey: keys.me }),
   });
 }
@@ -169,6 +178,7 @@ export function useUserAdmin() {
       onSuccess,
     }),
     remove: useMutation({ mutationFn: (userId: number) => api.delete(`/api/users/${userId}`), onSuccess }),
+    resetMfa: useMutation({ mutationFn: (userId: number) => api.delete(`/api/users/${userId}/mfa`), onSuccess }),
   };
 }
 

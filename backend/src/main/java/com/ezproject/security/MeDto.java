@@ -8,7 +8,7 @@ import com.ezproject.user.Role;
 
 /** Profil de l'utilisateur connecté et de son organisation. */
 public record MeDto(Long id, String email, String displayName, Role role, String jobTitle, Org organization,
-                    List<TeamRole> teams, boolean mustChangePassword) {
+                    List<TeamRole> teams, boolean mustChangePassword, boolean mfaEnabled) {
 
     public record Org(Long id, String name, String slug, Plan plan) {
     }

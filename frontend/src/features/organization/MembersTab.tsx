@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from 'react';
-import { Ban, Copy, KeyRound, MoreHorizontal, RotateCcw, Trash2, UserPlus } from 'lucide-react';
+import { Ban, Copy, KeyRound, MoreHorizontal, RotateCcw, ShieldOff, Trash2, UserPlus } from 'lucide-react';
 import { Dropdown, MenuItem } from '../../components/ui/Dropdown';
 import { useChangeCapacity, useChangeUserRole, useCreateUser, useMe, useUserAdmin, useUsers } from '../../api/hooks';
 import { isManager } from '../../lib/permissions';
@@ -84,6 +84,9 @@ export function MembersTab() {
                       <>
                         <MenuItem onClick={() => { close(); admin$.resetPassword.mutate(u.id, { onSuccess: (r) => setTemporary({ name: u.displayName, password: r.temporaryPassword }), onError }); }}>
                           <KeyRound className="size-4 text-ink-3" />Réinitialiser le mot de passe
+                        </MenuItem>
+                        <MenuItem onClick={() => { close(); if (confirm(`Réinitialiser la double authentification de ${u.displayName} (téléphone perdu) ?`)) admin$.resetMfa.mutate(u.id, { onSuccess: () => toast('success', 'Double authentification réinitialisée'), onError }); }}>
+                          <ShieldOff className="size-4 text-ink-3" />Réinitialiser la 2FA
                         </MenuItem>
                         <MenuItem onClick={() => { close(); admin$.setActive.mutate({ userId: u.id, active: !u.active }, { onSuccess: () => toast('success', u.active ? 'Compte désactivé' : 'Compte réactivé'), onError }); }}>
                           {u.active ? <><Ban className="size-4 text-ink-3" />Désactiver le compte</> : <><RotateCcw className="size-4 text-ink-3" />Réactiver le compte</>}

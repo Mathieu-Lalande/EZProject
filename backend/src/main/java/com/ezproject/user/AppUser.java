@@ -61,6 +61,17 @@ public class AppUser {
     @Column(name = "capacity_days_per_week", nullable = false)
     private BigDecimal capacityDaysPerWeek = BigDecimal.valueOf(5);
 
+    /** Secret TOTP chiffré (AES-GCM) ; présent dès l'initialisation, actif seulement après confirmation. */
+    @Column(name = "mfa_secret")
+    private String mfaSecret;
+
+    @Column(name = "mfa_enabled", nullable = false)
+    private boolean mfaEnabled;
+
+    /** Dernier pas de temps TOTP accepté : un code ne peut pas être rejoué. */
+    @Column(name = "mfa_last_step")
+    private Long mfaLastStep;
+
     protected AppUser() {
         // JPA
     }
@@ -97,6 +108,26 @@ public class AppUser {
         this.mustChangePassword = true;
     }
 
+    public void prepareMfa(String encryptedSecret) {
+        this.mfaSecret = encryptedSecret;
+        this.mfaEnabled = false;
+        this.mfaLastStep = null;
+    }
+
+    public void enableMfa() {
+        this.mfaEnabled = true;
+    }
+
+    public void disableMfa() {
+        this.mfaSecret = null;
+        this.mfaEnabled = false;
+        this.mfaLastStep = null;
+    }
+
+    public void acceptMfaStep(long step) {
+        this.mfaLastStep = step;
+    }
+
     public void changeCapacity(BigDecimal daysPerWeek) {
         this.capacityDaysPerWeek = daysPerWeek;
     }
@@ -117,6 +148,7 @@ public class AppUser {
         this.active = false;
         this.mustChangePassword = false;
         this.deletedAt = Instant.now();
+        disableMfa();
     }
 
     public boolean isDeleted() {
@@ -139,4 +171,7 @@ public class AppUser {
     public boolean isMustChangePassword() { return mustChangePassword; }
     public Instant getDeletedAt() { return deletedAt; }
     public BigDecimal getCapacityDaysPerWeek() { return capacityDaysPerWeek; }
+    public String getMfaSecret() { return mfaSecret; }
+    public boolean isMfaEnabled() { return mfaEnabled; }
+    public Long getMfaLastStep() { return mfaLastStep; }
 }

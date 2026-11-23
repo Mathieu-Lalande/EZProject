@@ -34,6 +34,9 @@ management:
         include: health
 
 app:
+  mfa:
+    # 32 octets en Base64 (ex. : openssl rand -base64 32). Sans clé, la double authentification est indisponible.
+    encryption-key: ${MFA_ENCRYPTION_KEY:}
   rate-limit:
     enabled: true
     login-ip: { capacity: 20, window: 10m }

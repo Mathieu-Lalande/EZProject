@@ -70,7 +70,16 @@ public class SecurityConfig {
                 .passwordParameter("password")
                 .successHandler((req, res, auth) -> {
                     loginThrottle.recordSuccess(req.getParameter("email"));
-                    res.setStatus(HttpStatus.NO_CONTENT.value());
+                    boolean mfa = users.findByEmailIgnoreCase(auth.getName()).map(u -> u.isMfaEnabled()).orElse(false);
+                    if (mfa) {
+                        // Mot de passe validé : la session reste bloquée jusqu'au second facteur
+                        req.getSession().setAttribute(com.ezproject.mfa.MfaService.PENDING_ATTRIBUTE, Boolean.TRUE);
+                        res.setStatus(HttpStatus.ACCEPTED.value());
+                        res.setContentType("application/json");
+                        res.getWriter().write("{\"mfaRequired\":true}");
+                    } else {
+                        res.setStatus(HttpStatus.NO_CONTENT.value());
+                    }
                 })
                 .failureHandler((req, res, ex) -> {
                     loginThrottle.recordFailure(req.getParameter("email"));

@@ -30,6 +30,6 @@ public class AuthController {
                 memberships.findByUserId(u.getId()).stream()
                         .map(m -> new MeDto.TeamRole(m.getTeam().getId(), m.getTeam().getName(), m.getRole()))
                         .toList(),
-                u.isMustChangePassword());
+                u.isMustChangePassword(), u.isMfaEnabled());
     }
 }

@@ -7,6 +7,9 @@ spring:
     password: ${DB_PASSWORD:ezproject-local}
 
 app:
+  mfa:
+    # Clé locale uniquement (publique dans le dépôt) : en production, fournir MFA_ENCRYPTION_KEY
+    encryption-key: ${MFA_ENCRYPTION_KEY:ZGV2LW9ubHktbWZhLWtleS1ub3QtZm9yLXByb2QtISE=}
   seed:
     # Données de démo créées au premier démarrage uniquement (base vide). SEED_DEMO=false pour partir d'une base vierge.
     enabled: ${SEED_DEMO:true}

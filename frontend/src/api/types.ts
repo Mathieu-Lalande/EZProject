@@ -70,6 +70,7 @@ export interface Me extends Omit<User, 'active' | 'capacityDaysPerWeek'> {
   organization: { id: number; name: string; slug: string; plan: Plan };
   teams: { teamId: number; teamName: string; role: ProjectRole }[];
   mustChangePassword: boolean;
+  mfaEnabled: boolean;
 }
 
 export interface Project {
