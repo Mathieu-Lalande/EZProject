@@ -5,10 +5,11 @@ import java.util.List;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.ezproject.access.Permission;
+import com.ezproject.access.ProjectAccessService;
 import com.ezproject.common.NotFoundException;
 import com.ezproject.project.ModuleType;
 import com.ezproject.project.Project;
-import com.ezproject.project.ProjectService;
 import com.ezproject.security.CurrentUser;
 import com.ezproject.user.AppUser;
 
@@ -17,12 +18,12 @@ import com.ezproject.user.AppUser;
 public class TodoService {
 
     private final TodoRepository repository;
-    private final ProjectService projectService;
+    private final ProjectAccessService access;
     private final CurrentUser currentUser;
 
-    public TodoService(TodoRepository repository, ProjectService projectService, CurrentUser currentUser) {
+    public TodoService(TodoRepository repository, ProjectAccessService access, CurrentUser currentUser) {
         this.repository = repository;
-        this.projectService = projectService;
+        this.access = access;
         this.currentUser = currentUser;
     }
 
@@ -32,7 +33,7 @@ public class TodoService {
     }
 
     public List<TodoDto> findByProject(Long projectId) {
-        projectService.getEntity(projectId);
+        access.require(projectId, Permission.TODO_VIEW);
         return repository.findByProjectIdOrderByDoneAscCreatedAtDesc(projectId).stream().map(TodoDto::from).toList();
     }
 
@@ -43,27 +44,36 @@ public class TodoService {
 
     @Transactional
     public TodoDto createForProject(Long projectId, TodoRequest request) {
-        Project project = projectService.requireModule(projectId, ModuleType.TODOS);
+        Project project = access.require(projectId, Permission.TODO_EDIT, ModuleType.TODOS);
         return TodoDto.from(repository.save(new TodoItem(currentUser.get(), project, request.title(), request.dueDate())));
     }
 
     @Transactional
     public TodoDto update(Long id, TodoRequest request) {
-        TodoItem todo = getVisible(id);
+        TodoItem todo = getEditable(id);
         todo.update(request.title(), request.done(), request.dueDate());
         return TodoDto.from(todo);
     }
 
     @Transactional
     public void delete(Long id) {
-        repository.delete(getVisible(id));
+        repository.delete(getEditable(id));
     }
 
-    /** Un todo personnel d'un autre utilisateur est traité comme inexistant (pas de fuite d'information, IDOR). */
-    private TodoItem getVisible(Long id) {
+    /**
+     * Todo personnel : uniquement son propriétaire (sinon 404, pas de fuite d'information / IDOR).
+     * Todo de projet : permission TODO_EDIT sur le projet.
+     */
+    private TodoItem getEditable(Long id) {
         AppUser me = currentUser.get();
-        return repository.findById(id)
-                .filter(t -> t.isVisibleTo(me))
-                .orElseThrow(() -> new NotFoundException("Todo", id));
+        TodoItem todo = repository.findById(id).orElseThrow(() -> new NotFoundException("Todo", id));
+        if (todo.isPersonal()) {
+            if (!todo.getOwner().getId().equals(me.getId())) {
+                throw new NotFoundException("Todo", id);
+            }
+        } else {
+            access.require(todo.getProject(), Permission.TODO_EDIT);
+        }
+        return todo;
     }
 }

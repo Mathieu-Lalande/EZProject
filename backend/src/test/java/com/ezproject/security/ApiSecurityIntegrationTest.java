@@ -18,18 +18,16 @@ import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.transaction.annotation.Transactional;
 
+import com.ezproject.support.DemoData;
 import com.ezproject.todo.TodoRepository;
-import com.ezproject.user.AppUserRepository;
 
 @SpringBootTest
 @AutoConfigureMockMvc
 @ActiveProfiles("dev")
+@Transactional
 class ApiSecurityIntegrationTest {
-
-    private static final String NEW_PROJECT = """
-            {"code":"NEWPRJ","name":"Nouveau","type":"CONSULTING"}
-            """;
 
     @Autowired
     MockMvc mvc;
@@ -38,7 +36,7 @@ class ApiSecurityIntegrationTest {
     TodoRepository todos;
 
     @Autowired
-    AppUserRepository users;
+    DemoData demo;
 
     @Test
     void anonymousAccessIsRejectedWith401() throws Exception {
@@ -69,28 +67,16 @@ class ApiSecurityIntegrationTest {
     }
 
     @Test
-    @WithMockUser(username = "hugo@ezproject.local", roles = "MEMBER")
-    void memberCannotCreateProject() throws Exception {
-        mvc.perform(post("/api/projects").with(csrf()).contentType(MediaType.APPLICATION_JSON).content(NEW_PROJECT))
-                .andExpect(status().isForbidden());
+    @WithMockUser(username = "camille@ezproject.local")
+    void meExposesOrganizationAndTeams() throws Exception {
+        mvc.perform(get("/api/auth/me"))
+                .andExpect(jsonPath("$.role").value("OWNER"))
+                .andExpect(jsonPath("$.organization.name").value("Horizon Conseil"))
+                .andExpect(jsonPath("$.teams[0].teamName").value("Direction"));
     }
 
     @Test
-    @WithMockUser(username = "hugo@ezproject.local", roles = "MEMBER")
-    void memberCannotSeePortfolio() throws Exception {
-        mvc.perform(get("/api/portfolio")).andExpect(status().isForbidden());
-    }
-
-    @Test
-    @WithMockUser(username = "lea@ezproject.local", roles = "MANAGER")
-    void managerSeesPortfolio() throws Exception {
-        mvc.perform(get("/api/portfolio"))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.kpis.openProjects").isNumber());
-    }
-
-    @Test
-    @WithMockUser(username = "lea@ezproject.local", roles = "MANAGER")
+    @WithMockUser(username = "lea@ezproject.local")
     void invalidProjectIsRejectedWithFieldErrors() throws Exception {
         mvc.perform(post("/api/projects").with(csrf()).contentType(MediaType.APPLICATION_JSON)
                         .content("{\"code\":\"bad code\",\"name\":\"\",\"type\":\"CONSULTING\"}"))
@@ -100,10 +86,9 @@ class ApiSecurityIntegrationTest {
     }
 
     @Test
-    @WithMockUser(username = "hugo@ezproject.local", roles = "MEMBER")
+    @WithMockUser(username = "hugo@ezproject.local")
     void personalTodoOfAnotherUserIsNotAccessible() throws Exception {
-        Long camilleId = users.findByEmailIgnoreCase("camille@ezproject.local").orElseThrow().getId();
-        Long foreignTodo = todos.findByOwnerIdAndProjectIsNullOrderByDoneAscCreatedAtDesc(camilleId)
+        Long foreignTodo = todos.findByOwnerIdAndProjectIsNullOrderByDoneAscCreatedAtDesc(demo.user("camille"))
                 .getFirst().getId();
 
         mvc.perform(put("/api/todos/" + foreignTodo).with(csrf()).contentType(MediaType.APPLICATION_JSON)
@@ -112,9 +97,9 @@ class ApiSecurityIntegrationTest {
     }
 
     @Test
-    @WithMockUser(username = "hugo@ezproject.local", roles = "MEMBER")
+    @WithMockUser(username = "hugo@ezproject.local")
     void pokerCardsAreHiddenUntilReveal() throws Exception {
-        String body = mvc.perform(post("/api/projects/1/poker/rounds").with(csrf())
+        String body = mvc.perform(post("/api/projects/" + demo.project("PORTAIL") + "/poker/rounds").with(csrf())
                         .contentType(MediaType.APPLICATION_JSON).content("{\"storyTitle\":\"Story test\"}"))
                 .andExpect(status().isCreated())
                 .andReturn().getResponse().getContentAsString();

@@ -13,7 +13,8 @@ const icons: Record<ModuleType, React.ReactNode> = {
 };
 
 /** Activation/désactivation des modules : rend chaque projet aussi léger ou complet que nécessaire. */
-export function ModulesSettings({ project, editable }: { project: Project; editable: boolean }) {
+export function ModulesSettings({ project }: { project: Project }) {
+  const editable = project.myPermissions.includes('PROJECT_MODULES');
   const update = useUpdateModules(project.id);
   const toast = useToast();
 

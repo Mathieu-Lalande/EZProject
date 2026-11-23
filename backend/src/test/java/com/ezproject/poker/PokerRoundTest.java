@@ -8,6 +8,8 @@ import org.junit.jupiter.api.Test;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import com.ezproject.common.BusinessRuleException;
+import com.ezproject.organization.Organization;
+import com.ezproject.organization.Plan;
 import com.ezproject.project.Project;
 import com.ezproject.project.ProjectType;
 import com.ezproject.user.AppUser;
@@ -21,7 +23,8 @@ class PokerRoundTest {
 
     @BeforeEach
     void setUp() {
-        round = new PokerRound(new Project("DEMO", "Démo", ProjectType.DEVELOPMENT), null, "Story");
+        Organization org = new Organization("Org", "org", Plan.FREE);
+        round = new PokerRound(new Project(org, null, "DEMO", "Démo", ProjectType.DEVELOPMENT), null, "Story");
         alice = user(1L, "Alice");
         bob = user(2L, "Bob");
     }
@@ -70,7 +73,7 @@ class PokerRoundTest {
     }
 
     private static AppUser user(Long id, String name) {
-        AppUser u = new AppUser(name + "@test.local", name, "x", Role.MEMBER, null);
+        AppUser u = new AppUser(new Organization("Org", "org", Plan.FREE), name + "@test.local", name, "x", Role.MEMBER, null);
         ReflectionTestUtils.setField(u, "id", id);
         return u;
     }

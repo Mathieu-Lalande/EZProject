@@ -1,10 +1,10 @@
 import { useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
-import { CornerDownLeft, FolderKanban, LayoutDashboard, Search, UserRound, Users } from 'lucide-react';
+import { Building2, CornerDownLeft, FileSpreadsheet, FolderKanban, LayoutDashboard, Search, UserRound, Users } from 'lucide-react';
 import clsx from 'clsx';
 import { useProjects } from '../../api/hooks';
-import { useIsManager } from '../../auth/RequireAuth';
+import { useMe } from '../../api/hooks';
 
 interface Item {
   id: string;
@@ -19,14 +19,19 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
   const [active, setActive] = useState(0);
   const navigate = useNavigate();
   const { data: projects = [] } = useProjects();
-  const isManager = useIsManager();
+  const { data: me } = useMe();
+  const guest = me?.role === 'GUEST';
 
   const items = useMemo<Item[]>(() => {
     const base: Item[] = [
-      ...(isManager ? [{ id: 'portfolio', label: 'Portefeuille', hint: 'Navigation', icon: <LayoutDashboard className="size-4" />, to: '/portfolio' }] : []),
+      { id: 'portfolio', label: 'Portefeuille', hint: 'Navigation', icon: <LayoutDashboard className="size-4" />, to: '/portfolio' },
       { id: 'me', label: 'Mon espace', hint: 'Navigation', icon: <UserRound className="size-4" />, to: '/me' },
       { id: 'projects', label: 'Tous les projets', hint: 'Navigation', icon: <FolderKanban className="size-4" />, to: '/projects' },
-      { id: 'team', label: 'Équipe', hint: 'Navigation', icon: <Users className="size-4" />, to: '/team' },
+      ...(guest ? [] : [
+        { id: 'org', label: 'Organisation', hint: 'Administration', icon: <Building2 className="size-4" />, to: '/organization' },
+        { id: 'teams', label: 'Équipes', hint: 'Administration', icon: <Users className="size-4" />, to: '/organization/teams' },
+        { id: 'import', label: 'Importer des données (CSV)', hint: 'Administration', icon: <FileSpreadsheet className="size-4" />, to: '/organization/data' },
+      ]),
     ];
     const projectItems: Item[] = projects.flatMap((p) => [
       { id: `p${p.id}`, label: p.name, hint: p.code, icon: <span className="size-2.5 rounded-[4px]" style={{ backgroundColor: p.color }} />, to: `/projects/${p.id}` },
@@ -34,7 +39,7 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
     ]);
     const q = query.trim().toLowerCase();
     return [...base, ...projectItems].filter((i) => !q || `${i.label} ${i.hint ?? ''}`.toLowerCase().includes(q)).slice(0, 12);
-  }, [projects, query, isManager]);
+  }, [projects, query, guest]);
 
   useEffect(() => {
     if (open) {

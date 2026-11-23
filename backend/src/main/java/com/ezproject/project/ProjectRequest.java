@@ -2,6 +2,8 @@ package com.ezproject.project;
 
 import java.time.LocalDate;
 
+import com.ezproject.access.Visibility;
+
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
@@ -16,9 +18,13 @@ public record ProjectRequest(
         @Size(max = 150) String client,
         @NotNull ProjectType type,
         ProjectStatus status,
+        @Size(max = 500) String statusReason,
+        ProjectPriority priority,
         Health health,
         @Pattern(regexp = "^#[0-9a-fA-F]{6}$", message = "Couleur hexadécimale attendue") String color,
         Long ownerId,
+        Long teamId,
+        Visibility visibility,
         LocalDate startDate,
         LocalDate endDate,
         @Min(0) @Max(100000) Integer budgetDays) {

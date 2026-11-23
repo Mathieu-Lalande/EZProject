@@ -9,6 +9,11 @@ spring:
       ddl-auto: validate
   flyway:
     enabled: true
+  servlet:
+    multipart:
+      # Import CSV : fichiers de taille raisonnable uniquement
+      max-file-size: 2MB
+      max-request-size: 2MB
 
 server:
   error:
@@ -27,6 +32,15 @@ management:
         include: health
 
 app:
+  rate-limit:
+    enabled: true
+    login-ip: { capacity: 20, window: 10m }
+    # Après 5 échecs, le compte est bloqué ; un essai redevient possible au fil de la recharge (1 toutes les 3 min)
+    login-account: { capacity: 5, window: 15m }
+    signup-ip: { capacity: 5, window: 1h }
+    import-user: { capacity: 20, window: 1h }
+    api-user: { capacity: 600, window: 1m }
+    api-anonymous: { capacity: 120, window: 1m }
   cors:
     # Origines autorisées (frontend). En dev, le proxy Vite rend l'appel same-origin.
     allowed-origins: ${APP_CORS_ALLOWED_ORIGINS:http://localhost:5173}

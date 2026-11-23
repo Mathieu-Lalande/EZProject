@@ -1,10 +1,11 @@
 package com.ezproject.portfolio;
 
-import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+/** Accessible à tous : le périmètre est restreint aux projets visibles par l'utilisateur. */
 @RestController
 @RequestMapping("/api/portfolio")
 public class PortfolioController {
@@ -16,8 +17,7 @@ public class PortfolioController {
     }
 
     @GetMapping
-    @PreAuthorize("hasAnyRole('ADMIN','MANAGER')")
-    public PortfolioDto overview() {
-        return service.overview();
+    public PortfolioDto overview(@RequestParam(required = false) Long teamId) {
+        return service.overview(teamId);
     }
 }

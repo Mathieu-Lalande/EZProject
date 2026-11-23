@@ -3,11 +3,20 @@ package com.ezproject.project;
 import java.util.List;
 import java.util.Objects;
 
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.ezproject.access.AccessContext;
+import com.ezproject.access.Permission;
+import com.ezproject.access.ProjectAccessService;
+import com.ezproject.access.ProjectRole;
+import com.ezproject.access.Visibility;
 import com.ezproject.common.BusinessRuleException;
-import com.ezproject.common.NotFoundException;
+import com.ezproject.organization.Organization;
+import com.ezproject.security.CurrentUser;
+import com.ezproject.team.Team;
+import com.ezproject.team.TeamService;
 import com.ezproject.user.AppUser;
 import com.ezproject.user.UserService;
 
@@ -18,70 +27,133 @@ public class ProjectService {
     private static final String DEFAULT_COLOR = "#6366f1";
 
     private final ProjectRepository repository;
+    private final ProjectStatusChangeRepository history;
+    private final ProjectAccessService access;
     private final UserService userService;
+    private final TeamService teamService;
+    private final CurrentUser currentUser;
 
-    public ProjectService(ProjectRepository repository, UserService userService) {
+    public ProjectService(ProjectRepository repository, ProjectStatusChangeRepository history,
+                          ProjectAccessService access, UserService userService, TeamService teamService,
+                          CurrentUser currentUser) {
         this.repository = repository;
+        this.history = history;
+        this.access = access;
         this.userService = userService;
+        this.teamService = teamService;
+        this.currentUser = currentUser;
     }
 
+    /** Projets visibles par l'utilisateur courant dans son organisation. */
     public List<ProjectDto> findAll() {
-        return repository.findAllByOrderByNameAsc().stream().map(ProjectDto::from).toList();
+        AccessContext ctx = access.context();
+        return repository.findByOrganizationIdOrderByNameAsc(ctx.user().getOrganization().getId()).stream()
+                .flatMap(p -> ctx.accessTo(p).map(a -> ProjectDto.from(p, a)).stream())
+                .toList();
     }
 
     public ProjectDto get(Long id) {
-        return ProjectDto.from(getEntity(id));
+        Project p = access.requireVisible(id);
+        return ProjectDto.from(p, access.accessTo(p));
     }
 
-    public Project getEntity(Long id) {
-        return repository.findById(id).orElseThrow(() -> new NotFoundException("Projet", id));
+    public List<StatusChangeDto> history(Long id) {
+        access.requireVisible(id);
+        return history.findByProjectIdOrderByChangedAtDesc(id).stream().map(StatusChangeDto::from).toList();
     }
 
-    /** Vérifie qu'un module est activé avant d'autoriser son usage sur le projet. */
-    public Project requireModule(Long projectId, ModuleType module) {
-        Project project = getEntity(projectId);
-        if (!project.hasModule(module)) {
-            throw new BusinessRuleException("Le module " + module + " n'est pas activé sur ce projet");
-        }
-        return project;
-    }
-
+    /**
+     * Création : managers et administrateurs sur toute équipe ; un membre uniquement s'il est responsable
+     * (LEAD) de l'équipe choisie. Les invités ne créent jamais de projet.
+     */
     @Transactional
     public ProjectDto create(ProjectRequest request) {
-        if (repository.existsByCodeIgnoreCase(request.code())) {
+        AppUser me = currentUser.get();
+        Organization org = me.getOrganization();
+        Team team = request.teamId() == null ? null : teamService.getInOrganization(request.teamId(), org.getId());
+        boolean allowed = me.getRole().seesWholePortfolio()
+                || (team != null && teamService.roleIn(team.getId(), me.getId()) == ProjectRole.LEAD);
+        if (!allowed) {
+            throw new AccessDeniedException("Création réservée aux managers et aux responsables d'équipe");
+        }
+        if (!org.getPlan().allowsMoreProjects(repository.countByOrganizationId(org.getId()))) {
+            throw new BusinessRuleException("Limite de projets atteinte pour l'offre " + org.getPlan()
+                    + " : passez à une offre supérieure");
+        }
+        if (repository.existsByOrganizationIdAndCodeIgnoreCase(org.getId(), request.code())) {
             throw new BusinessRuleException("Le code projet " + request.code() + " est déjà utilisé");
         }
-        Project project = new Project(request.code(), request.name(), request.type());
-        apply(project, request);
-        return ProjectDto.from(repository.save(project));
+        Project project = new Project(org, team, request.code(), request.name(), request.type());
+        project.assign(team, Objects.requireNonNullElse(request.visibility(), Visibility.ORGANIZATION));
+        applyDetails(project, request, org);
+        repository.save(project);
+        record(project.changeStatus(Objects.requireNonNullElse(request.status(), ProjectStatus.PLANNED),
+                request.statusReason(), me));
+        if (project.getStatus() == ProjectStatus.PLANNED) {
+            history.save(new ProjectStatusChange(project, null, ProjectStatus.PLANNED, "Création du projet", me));
+        }
+        return ProjectDto.from(project, access.accessTo(project));
     }
 
     @Transactional
     public ProjectDto update(Long id, ProjectRequest request) {
-        Project project = getEntity(id);
+        Project project = access.require(id, Permission.PROJECT_EDIT);
+        AppUser me = currentUser.get();
         if (!project.getCode().equalsIgnoreCase(request.code())) {
             throw new BusinessRuleException("Le code projet ne peut pas être modifié");
         }
-        apply(project, request);
-        return ProjectDto.from(project);
+        Long newTeamId = request.teamId();
+        Long currentTeamId = project.getTeam() == null ? null : project.getTeam().getId();
+        Visibility newVisibility = Objects.requireNonNullElse(request.visibility(), project.getVisibility());
+        if (!Objects.equals(newTeamId, currentTeamId) || newVisibility != project.getVisibility()) {
+            // Changer d'équipe ou de visibilité modifie qui voit le projet : permission de gestion des accès
+            access.require(project, Permission.PROJECT_MEMBERS);
+            Team team = newTeamId == null ? null : teamService.getInOrganization(newTeamId, me.getOrganization().getId());
+            project.assign(team, newVisibility);
+        }
+        applyDetails(project, request, me.getOrganization());
+        if (request.status() != null) {
+            record(project.changeStatus(request.status(), request.statusReason(), me));
+        }
+        return ProjectDto.from(project, access.accessTo(project));
+    }
+
+    @Transactional
+    public ProjectDto changeStatus(Long id, StatusRequest request) {
+        Project project = access.require(id, Permission.PROJECT_EDIT);
+        record(project.changeStatus(request.status(), request.reason(), currentUser.get()));
+        return ProjectDto.from(project, access.accessTo(project));
+    }
+
+    @Transactional
+    public ProjectDto changePriority(Long id, ProjectPriority priority) {
+        Project project = access.require(id, Permission.PROJECT_EDIT);
+        project.prioritize(priority);
+        return ProjectDto.from(project, access.accessTo(project));
     }
 
     @Transactional
     public ProjectDto updateModules(Long id, ModulesRequest request) {
-        Project project = getEntity(id);
+        Project project = access.require(id, Permission.PROJECT_MODULES);
         project.replaceModules(request.modules());
-        return ProjectDto.from(project);
+        return ProjectDto.from(project, access.accessTo(project));
     }
 
     @Transactional
     public void delete(Long id) {
-        repository.delete(getEntity(id));
+        repository.delete(access.require(id, Permission.PROJECT_DELETE));
     }
 
-    private void apply(Project project, ProjectRequest r) {
-        AppUser owner = r.ownerId() == null ? null : userService.getEntity(r.ownerId());
+    private void record(ProjectStatusChange change) {
+        if (change != null) {
+            history.save(change);
+        }
+    }
+
+    private void applyDetails(Project project, ProjectRequest r, Organization org) {
+        AppUser owner = r.ownerId() == null ? null : userService.getInOrganization(r.ownerId(), org.getId());
         project.update(r.name(), r.description(), r.client(), r.type(),
-                Objects.requireNonNullElse(r.status(), project.getStatus()),
+                Objects.requireNonNullElse(r.priority(), project.getPriority()),
                 Objects.requireNonNullElse(r.health(), project.getHealth()),
                 Objects.requireNonNullElse(r.color(), DEFAULT_COLOR),
                 owner, r.startDate(), r.endDate(), r.budgetDays());

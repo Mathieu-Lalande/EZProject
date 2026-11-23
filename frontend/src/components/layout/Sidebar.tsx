@@ -1,10 +1,9 @@
 import { NavLink } from 'react-router-dom';
 import clsx from 'clsx';
-import { LayoutDashboard, UserRound, FolderKanban, Users, Search, Moon, Sun, LogOut, X } from 'lucide-react';
+import { LayoutDashboard, UserRound, FolderKanban, Building2, Search, Moon, Sun, LogOut, X, PauseCircle } from 'lucide-react';
 import { useLogout, useMe, useProjects } from '../../api/hooks';
-import { useIsManager } from '../../auth/RequireAuth';
 import { useTheme } from '../../lib/theme';
-import { roleLabel } from '../../lib/labels';
+import { planLabel, roleLabel } from '../../lib/labels';
 import { Avatar } from '../ui/Avatar';
 
 const healthDot = { GREEN: 'bg-emerald-500', AMBER: 'bg-amber-500', RED: 'bg-red-500' } as const;
@@ -18,17 +17,19 @@ interface SidebarProps {
 export function Sidebar({ onSearch, mobileOpen, onNavigate }: SidebarProps) {
   const { data: me } = useMe();
   const { data: projects = [] } = useProjects();
-  const isManager = useIsManager();
   const logout = useLogout();
   const [theme, toggleTheme] = useTheme();
 
   const nav = [
-    ...(isManager ? [{ to: '/portfolio', label: 'Portefeuille', icon: LayoutDashboard }] : []),
+    { to: '/portfolio', label: 'Portefeuille', icon: LayoutDashboard },
     { to: '/me', label: 'Mon espace', icon: UserRound },
     { to: '/projects', label: 'Projets', icon: FolderKanban },
-    { to: '/team', label: 'Équipe', icon: Users },
+    ...(me?.role !== 'GUEST' ? [{ to: '/organization', label: 'Organisation', icon: Building2 }] : []),
   ];
-  const openProjects = projects.filter((p) => ['PLANNED', 'ACTIVE', 'ON_HOLD'].includes(p.status));
+  const priorityRank = { P1: 0, P2: 1, P3: 2, P4: 3 } as const;
+  const openProjects = projects
+    .filter((p) => ['PLANNED', 'ACTIVE', 'ON_HOLD'].includes(p.status))
+    .sort((a, b) => priorityRank[a.priority] - priorityRank[b.priority] || a.name.localeCompare(b.name));
 
   return (
     <>
@@ -44,7 +45,14 @@ export function Sidebar({ onSearch, mobileOpen, onNavigate }: SidebarProps) {
             <span className="flex size-8 items-center justify-center rounded-lg bg-gradient-to-br from-brand-500 to-violet-600 text-xs font-bold text-white shadow-sm shadow-brand-600/30">
               EZ
             </span>
-            EZProject
+            <span className="min-w-0">
+              <span className="block leading-tight">EZProject</span>
+              {me && (
+                <span className="block truncate text-[11px] font-normal text-ink-3">
+                  {me.organization.name} · {planLabel[me.organization.plan]}
+                </span>
+              )}
+            </span>
           </div>
           <button className="rounded-md p-1 hover:bg-surface-2 lg:hidden" onClick={onNavigate} aria-label="Fermer le menu">
             <X className="size-4" />
@@ -97,7 +105,11 @@ export function Sidebar({ onSearch, mobileOpen, onNavigate }: SidebarProps) {
             >
               <span className="size-2.5 shrink-0 rounded-[4px]" style={{ backgroundColor: p.color }} />
               <span className="truncate">{p.name}</span>
-              <span className={clsx('ml-auto size-1.5 shrink-0 rounded-full', healthDot[p.health])} title="Météo" />
+              {p.status === 'ON_HOLD' ? (
+                <PauseCircle className="ml-auto size-3.5 shrink-0 text-amber-500" aria-label="En pause" />
+              ) : (
+                <span className={clsx('ml-auto size-1.5 shrink-0 rounded-full', healthDot[p.health])} title="Météo" />
+              )}
             </NavLink>
           ))}
         </div>

@@ -2,6 +2,7 @@ import { Navigate, useLocation } from 'react-router-dom';
 import type { ReactNode } from 'react';
 import { useMe } from '../api/hooks';
 import { Spinner } from '../components/ui/Spinner';
+import { isAdmin, isManager } from '../lib/permissions';
 
 export function RequireAuth({ children }: { children: ReactNode }) {
   const { data: me, isLoading } = useMe();
@@ -12,6 +13,9 @@ export function RequireAuth({ children }: { children: ReactNode }) {
 }
 
 export function useIsManager(): boolean {
-  const { data: me } = useMe();
-  return me?.role === 'ADMIN' || me?.role === 'MANAGER';
+  return isManager(useMe().data);
+}
+
+export function useIsAdmin(): boolean {
+  return isAdmin(useMe().data);
 }

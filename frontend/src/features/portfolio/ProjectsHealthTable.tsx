@@ -1,12 +1,14 @@
 import { Link } from 'react-router-dom';
-import { AlertTriangle, Flag } from 'lucide-react';
+import { AlertTriangle, Flag, PauseCircle } from 'lucide-react';
+import { PriorityBadge } from '../../components/ui/PriorityBadge';
+import { StatusBadge } from '../../components/ui/StatusBadge';
 import clsx from 'clsx';
 import type { ProjectSummary } from '../../api/types';
 import { HealthBadge } from '../../components/ui/HealthBadge';
 import { ProgressBar } from '../../components/ui/ProgressBar';
 import { Badge } from '../../components/ui/Badge';
 import { formatDate, relativeDays } from '../../lib/format';
-import { projectStatusLabel, projectTypeLabel } from '../../lib/labels';
+import { projectTypeLabel } from '../../lib/labels';
 
 export function ProjectsHealthTable({ projects }: { projects: ProjectSummary[] }) {
   return (
@@ -15,7 +17,9 @@ export function ProjectsHealthTable({ projects }: { projects: ProjectSummary[] }
         <table className="w-full min-w-[880px] text-sm">
           <thead>
             <tr className="border-b border-line bg-surface-2/60 text-left text-xs text-ink-3">
-              <th className="min-w-64 px-4 py-2.5 font-medium">Projet</th>
+              <th className="w-14 px-4 py-2.5 font-medium">Prio.</th>
+              <th className="min-w-64 px-3 py-2.5 font-medium">Projet</th>
+              <th className="px-3 py-2.5 font-medium">Statut</th>
               <th className="px-3 py-2.5 font-medium">Responsable</th>
               <th className="px-3 py-2.5 font-medium">Météo</th>
               <th className="w-44 px-3 py-2.5 font-medium">Avancement</th>
@@ -26,8 +30,9 @@ export function ProjectsHealthTable({ projects }: { projects: ProjectSummary[] }
           </thead>
           <tbody>
             {projects.map((p) => (
-              <tr key={p.id} className="group border-b border-line last:border-0 hover:bg-surface-2/50">
-                <td className="px-4 py-3">
+              <tr key={p.id} className={clsx('group border-b border-line last:border-0 hover:bg-surface-2/50', p.status === 'ON_HOLD' && 'bg-amber-50/40 dark:bg-amber-500/5')}>
+                <td className="px-4 py-3"><PriorityBadge priority={p.priority} short /></td>
+                <td className="px-3 py-3">
                   <Link to={`/projects/${p.id}`} className="flex items-center gap-3">
                     <span className="size-8 shrink-0 rounded-lg text-[10px] font-bold text-white flex items-center justify-center" style={{ backgroundColor: p.color }}>
                       {p.code.slice(0, 2)}
@@ -38,10 +43,18 @@ export function ProjectsHealthTable({ projects }: { projects: ProjectSummary[] }
                         {p.atRisk && <AlertTriangle className="size-3.5 text-amber-500" aria-label="À risque" />}
                       </span>
                       <span className="block max-w-72 truncate text-xs text-ink-3">
-                        {projectTypeLabel[p.type]}{p.client ? ` · ${p.client}` : ''} · {projectStatusLabel[p.status]}
+                        {p.teamName ?? 'Sans équipe'} · {projectTypeLabel[p.type]}{p.client ? ` · ${p.client}` : ''}
                       </span>
                     </span>
                   </Link>
+                </td>
+                <td className="px-3 py-3">
+                  <StatusBadge status={p.status} reason={p.statusReason} />
+                  {p.status === 'ON_HOLD' && p.statusReason && (
+                    <span className="mt-1 flex max-w-44 items-start gap-1 text-[11px] text-amber-700 dark:text-amber-300" title={p.statusReason}>
+                      <PauseCircle className="mt-px size-3 shrink-0" /><span className="line-clamp-2">{p.statusReason}</span>
+                    </span>
+                  )}
                 </td>
                 <td className="px-3 py-3 whitespace-nowrap text-ink-2">{p.ownerName ?? '—'}</td>
                 <td className="px-3 py-3"><HealthBadge health={p.health} /></td>

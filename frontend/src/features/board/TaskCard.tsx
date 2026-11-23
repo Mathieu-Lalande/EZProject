@@ -43,8 +43,8 @@ export function TaskCardView({ task, dragging, onClick }: { task: Task; dragging
   );
 }
 
-export function SortableTaskCard({ task, onOpen }: { task: Task; onOpen: (task: Task) => void }) {
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: task.id, data: { status: task.status } });
+export function SortableTaskCard({ task, onOpen, disabled }: { task: Task; onOpen: (task: Task) => void; disabled?: boolean }) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: task.id, data: { status: task.status }, disabled });
   return (
     <div
       ref={setNodeRef}

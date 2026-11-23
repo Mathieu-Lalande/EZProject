@@ -2,9 +2,11 @@ import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { FolderPlus, Plus, Search } from 'lucide-react';
 import clsx from 'clsx';
-import { useProjects } from '../api/hooks';
+import { useMe, useProjects, useTeams } from '../api/hooks';
 import type { ProjectStatus } from '../api/types';
-import { useIsManager } from '../auth/RequireAuth';
+import { canCreateProject } from '../lib/permissions';
+import { PriorityBadge } from '../components/ui/PriorityBadge';
+import { StatusBadge } from '../components/ui/StatusBadge';
 import { PageHeader } from '../components/ui/PageHeader';
 import { Button } from '../components/ui/Button';
 import { Spinner } from '../components/ui/Spinner';
@@ -17,17 +19,25 @@ import { ProjectFormModal } from '../features/projects/ProjectFormModal';
 
 export function ProjectsPage() {
   const { data: projects = [], isLoading } = useProjects();
-  const isManager = useIsManager();
+  const { data: me } = useMe();
+  const { data: teams = [] } = useTeams();
+  const isManager = canCreateProject(me);
+  const [teamId, setTeamId] = useState<string>('');
   const [creating, setCreating] = useState(false);
   const [search, setSearch] = useState('');
   const [status, setStatus] = useState<ProjectStatus | 'ALL'>('ALL');
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
-    return projects.filter(
-      (p) => (status === 'ALL' || p.status === status) && (!q || `${p.name} ${p.code} ${p.client ?? ''}`.toLowerCase().includes(q)),
-    );
-  }, [projects, search, status]);
+    return projects
+      .filter(
+        (p) =>
+          (status === 'ALL' || p.status === status) &&
+          (!teamId || String(p.team?.id) === teamId) &&
+          (!q || `${p.name} ${p.code} ${p.client ?? ''}`.toLowerCase().includes(q)),
+      )
+      .sort((a, b) => a.priority.localeCompare(b.priority) || a.name.localeCompare(b.name));
+  }, [projects, search, status, teamId]);
 
   if (isLoading) return <Spinner />;
 
@@ -35,7 +45,7 @@ export function ProjectsPage() {
     <div className="animate-fade-in">
       <PageHeader
         title="Projets"
-        subtitle={`${projects.length} projet${projects.length > 1 ? 's' : ''} — développement, conseil et interne`}
+        subtitle={`${projects.length} projet${projects.length > 1 ? 's' : ''} accessible${projects.length > 1 ? 's' : ''} — triés par priorité`}
         actions={isManager && <Button icon={<Plus className="size-4" />} onClick={() => setCreating(true)}>Nouveau projet</Button>}
       />
       <div className="mb-5 flex flex-wrap gap-2">
@@ -43,6 +53,12 @@ export function ProjectsPage() {
           <Search className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-ink-3" />
           <input className="input w-64 pl-8" placeholder="Nom, code, client…" value={search} onChange={(e) => setSearch(e.target.value)} />
         </div>
+        {teams.length > 1 && (
+          <select className="input w-48" value={teamId} onChange={(e) => setTeamId(e.target.value)} aria-label="Filtrer par équipe">
+            <option value="">Toutes les équipes</option>
+            {teams.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
+          </select>
+        )}
         <div className="flex flex-wrap rounded-lg border border-line bg-surface p-0.5">
           {(['ALL', 'ACTIVE', 'PLANNED', 'ON_HOLD', 'COMPLETED'] as const).map((s) => (
             <button key={s} onClick={() => setStatus(s)} className={clsx('rounded-md px-2.5 py-1 text-xs font-medium', status === s ? 'bg-surface-2 text-ink shadow-sm' : 'text-ink-3 hover:text-ink')}>
@@ -62,16 +78,21 @@ export function ProjectsPage() {
                 <span className="flex size-10 shrink-0 items-center justify-center rounded-xl text-xs font-bold text-white" style={{ backgroundColor: p.color }}>{p.code.slice(0, 2)}</span>
                 <div className="min-w-0 flex-1">
                   <div className="truncate font-semibold group-hover:text-brand-600">{p.name}</div>
-                  <div className="truncate text-xs text-ink-3">{projectTypeLabel[p.type]} · {p.client ?? 'Interne'}</div>
+                  <div className="truncate text-xs text-ink-3">{p.team?.name ?? 'Sans équipe'} · {projectTypeLabel[p.type]} · {p.client ?? 'Interne'}</div>
                 </div>
                 <HealthBadge health={p.health} />
               </div>
+              <div className="mt-3 flex flex-wrap items-center gap-1.5">
+                <PriorityBadge priority={p.priority} />
+                <StatusBadge status={p.status} reason={p.statusReason} />
+              </div>
+              {p.status === 'ON_HOLD' && p.statusReason && <p className="mt-2 line-clamp-1 text-xs text-amber-700 dark:text-amber-300">⏸ {p.statusReason}</p>}
               {p.description && <p className="mt-3 line-clamp-2 text-sm text-ink-2">{p.description}</p>}
               <div className="mt-4 flex flex-wrap gap-1">
                 {p.modules.map((m) => <span key={m} className="rounded-md bg-surface-2 px-1.5 py-0.5 text-[11px] text-ink-2">{moduleInfo[m].label}</span>)}
               </div>
               <div className="mt-auto flex items-center justify-between pt-4 text-xs text-ink-3">
-                <span className="flex items-center gap-1.5">{p.owner && <Avatar name={p.owner.displayName} size="xs" />}{projectStatusLabel[p.status]}</span>
+                <span className="flex items-center gap-1.5">{p.owner && <Avatar name={p.owner.displayName} size="xs" />}{p.owner?.displayName ?? '—'}</span>
                 <span>Échéance {formatDate(p.endDate, true)}</span>
               </div>
             </Link>

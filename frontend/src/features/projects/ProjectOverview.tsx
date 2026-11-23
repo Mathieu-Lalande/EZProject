@@ -7,13 +7,17 @@ import { Badge } from '../../components/ui/Badge';
 import { formatDate } from '../../lib/format';
 import { TASK_COLUMNS, phaseStateLabel, taskStatusLabel } from '../../lib/labels';
 import { TodoList } from '../todos/TodoList';
+import { ProjectHistory } from './ProjectHistory';
+import { can } from '../../lib/permissions';
 
 const statusColor = { BACKLOG: '#a1a1aa', TODO: '#0ea5e9', IN_PROGRESS: '#6366f1', REVIEW: '#f59e0b', DONE: '#10b981' } as const;
 
 export function ProjectOverview({ project }: { project: Project }) {
-  const { data: tasks = [] } = useTasks(project.id);
-  const hasRetro = project.modules.includes('RETRO_PLANNING');
-  const { data: plan } = useRetroPlan(project.id);
+  const canTasks = can(project, 'TASK_VIEW');
+  const { data: allTasks = [] } = useTasks(project.id, canTasks);
+  const tasks = canTasks ? allTasks : [];
+  const hasRetro = project.modules.includes('RETRO_PLANNING') && can(project, 'RETRO_VIEW');
+  const { data: plan } = useRetroPlan(project.id, hasRetro);
 
   const done = tasks.filter((t) => t.status === 'DONE').length;
   const progress = tasks.length ? Math.round((done / tasks.length) * 100) : 0;
@@ -72,7 +76,9 @@ export function ProjectOverview({ project }: { project: Project }) {
           </div>
         )}
 
-        {project.modules.includes('TODOS') && <TodoList projectId={project.id} title="Checklist de l'équipe" />}
+        {project.modules.includes('TODOS') && can(project, 'TODO_VIEW') && (
+          <TodoList projectId={project.id} title="Checklist de l'équipe" readOnly={!can(project, 'TODO_EDIT')} />
+        )}
       </div>
 
       <div className="space-y-6">
@@ -89,8 +95,9 @@ export function ProjectOverview({ project }: { project: Project }) {
             </div>
           )}
         </div>
+        <ProjectHistory projectId={project.id} />
         <div className="card p-5">
-          <h3 className="mb-3 text-sm font-semibold">Équipe</h3>
+          <h3 className="mb-3 text-sm font-semibold">Personnes assignées</h3>
           {team.length === 0 ? <p className="text-sm text-ink-3">Aucune tâche assignée.</p> : (
             <ul className="space-y-2.5">
               {team.map((u) => (

@@ -14,6 +14,7 @@ import { EmptyState } from '../../components/ui/EmptyState';
 import { formatDate } from '../../lib/format';
 import { phaseStateLabel, projectTypeLabel } from '../../lib/labels';
 import { GanttChart } from './GanttChart';
+import { can } from '../../lib/permissions';
 
 const stateTone: Record<PhaseState, Tone> = { DONE: 'green', LATE: 'red', IN_PROGRESS: 'brand', UPCOMING: 'neutral', UNSCHEDULED: 'neutral' };
 
@@ -24,6 +25,7 @@ export function RetroPlanning({ project }: { project: Project }) {
   const [kind, setKind] = useState<PhaseKind>('PHASE');
   const [duration, setDuration] = useState(5);
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }));
+  const editable = can(project, 'RETRO_EDIT');
 
   if (isLoading || !plan) return <Spinner />;
 
@@ -65,7 +67,7 @@ export function RetroPlanning({ project }: { project: Project }) {
           icon={<Wand2 className="size-5" />}
           title="Aucune phase pour l'instant"
           description="Partez d'un gabarit adapté ou ajoutez vos phases une à une : les dates sont calculées à rebours depuis l'échéance."
-          action={
+          action={editable &&
             <div className="flex flex-wrap justify-center gap-2">
               {(['DEVELOPMENT', 'CONSULTING', 'INTERNAL'] as ProjectType[]).map((t) => (
                 <Button key={t} variant={t === project.type ? 'primary' : 'secondary'} size="sm" onClick={() => m.template.mutate(t)} loading={m.template.isPending && m.template.variables === t}>
@@ -84,7 +86,7 @@ export function RetroPlanning({ project }: { project: Project }) {
             </div>
           )}
           <div className="card overflow-hidden">
-            <div className="border-b border-line px-5 py-3 text-sm font-semibold">Phases et jalons <span className="font-normal text-ink-3">· glisser pour réordonner</span></div>
+            <div className="border-b border-line px-5 py-3 text-sm font-semibold">Phases et jalons {editable && <span className="font-normal text-ink-3">· glisser pour réordonner</span>}</div>
             <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
               <SortableContext items={plan.phases.map((p) => p.id)} strategy={verticalListSortingStrategy}>
                 <ul className="divide-y divide-line">
@@ -92,6 +94,7 @@ export function RetroPlanning({ project }: { project: Project }) {
                     <PhaseRow
                       key={p.id}
                       phase={p}
+                      editable={editable}
                       onChange={(input) => m.update.mutate({ id: p.id, input })}
                       onDelete={() => m.remove.mutate(p.id)}
                     />
@@ -103,7 +106,7 @@ export function RetroPlanning({ project }: { project: Project }) {
         </>
       )}
 
-      <form onSubmit={add} className="card flex flex-wrap items-end gap-3 p-4">
+      {editable && <form onSubmit={add} className="card flex flex-wrap items-end gap-3 p-4">
         <label className="min-w-48 flex-1">
           <span className="label">Nouvelle phase ou jalon</span>
           <input className="input" placeholder="ex. Recette utilisateur" maxLength={150} value={name} onChange={(e) => setName(e.target.value)} />
@@ -122,7 +125,7 @@ export function RetroPlanning({ project }: { project: Project }) {
           </label>
         )}
         <Button type="submit" icon={<Plus className="size-4" />} loading={m.add.isPending}>Ajouter à la fin</Button>
-      </form>
+      </form>}
     </div>
   );
 }
@@ -139,8 +142,8 @@ function Stat({ label, value, icon, warn }: { label: string; value: string; icon
   );
 }
 
-function PhaseRow({ phase, onChange, onDelete }: { phase: RetroPhase; onChange: (input: { name: string; kind: PhaseKind; durationDays: number; done: boolean }) => void; onDelete: () => void }) {
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: phase.id });
+function PhaseRow({ phase, onChange, onDelete, editable }: { phase: RetroPhase; editable: boolean; onChange: (input: { name: string; kind: PhaseKind; durationDays: number; done: boolean }) => void; onDelete: () => void }) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: phase.id, disabled: !editable });
   const [duration, setDuration] = useState(phase.durationDays);
   useEffect(() => setDuration(phase.durationDays), [phase.durationDays]);
   const base = { name: phase.name, kind: phase.kind, durationDays: phase.durationDays, done: phase.done };
@@ -151,6 +154,7 @@ function PhaseRow({ phase, onChange, onDelete }: { phase: RetroPhase; onChange: 
         <GripVertical className="size-4" />
       </button>
       <button
+        disabled={!editable}
         onClick={() => onChange({ ...base, done: !phase.done })}
         aria-label={phase.done ? 'Marquer non terminé' : 'Marquer terminé'}
         className={clsx('flex size-5 items-center justify-center rounded-md border transition', phase.done ? 'border-emerald-500 bg-emerald-500 text-white' : 'border-line hover:border-brand-500')}
@@ -164,6 +168,7 @@ function PhaseRow({ phase, onChange, onDelete }: { phase: RetroPhase; onChange: 
           <input
             type="number"
             min={1}
+            disabled={!editable}
             className="w-14 rounded-md border border-transparent bg-transparent px-1.5 py-0.5 text-right text-sm text-ink hover:border-line focus:border-brand-500 focus:outline-none"
             value={duration}
             onChange={(e) => setDuration(Number(e.target.value))}
@@ -177,9 +182,9 @@ function PhaseRow({ phase, onChange, onDelete }: { phase: RetroPhase; onChange: 
         {phase.start ? (phase.kind === 'MILESTONE' ? formatDate(phase.start) : `${formatDate(phase.start)} → ${formatDate(phase.end)}`) : '—'}
       </span>
       <Badge tone={stateTone[phase.state]} className="w-20 justify-center">{phaseStateLabel[phase.state]}</Badge>
-      <button onClick={onDelete} className="rounded p-1 text-ink-3 opacity-0 transition group-hover:opacity-100 hover:text-red-600 focus:opacity-100" aria-label="Supprimer">
+      {editable && <button onClick={onDelete} className="rounded p-1 text-ink-3 opacity-0 transition group-hover:opacity-100 hover:text-red-600 focus:opacity-100" aria-label="Supprimer">
         <Trash2 className="size-4" />
-      </button>
+      </button>}
     </li>
   );
 }

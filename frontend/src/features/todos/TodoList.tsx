@@ -7,7 +7,7 @@ import { Spinner } from '../../components/ui/Spinner';
 import { EmptyState } from '../../components/ui/EmptyState';
 import { formatDate, toIsoDate } from '../../lib/format';
 
-export function TodoList({ projectId, title }: { projectId?: number; title?: string }) {
+export function TodoList({ projectId, title, readOnly = false }: { projectId?: number; title?: string; readOnly?: boolean }) {
   const { data: todos = [], isLoading } = useTodos(projectId);
   const { create, update, remove } = useTodoMutations(projectId);
   const [text, setText] = useState('');
@@ -28,13 +28,13 @@ export function TodoList({ projectId, title }: { projectId?: number; title?: str
   return (
     <div className="card p-5">
       {title && <h3 className="mb-4 text-sm font-semibold">{title}</h3>}
-      <form onSubmit={submit} className="flex gap-2">
+      {!readOnly && <form onSubmit={submit} className="flex gap-2">
         <div className="relative flex-1">
           <Plus className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-ink-3" />
           <input className="input pl-9" placeholder="Ajouter un todo et appuyer sur Entrée" maxLength={300} value={text} onChange={(e) => setText(e.target.value)} />
         </div>
         <input className="input w-40" type="date" aria-label="Échéance" value={due} onChange={(e) => setDue(e.target.value)} />
-      </form>
+      </form>}
 
       {isLoading ? (
         <Spinner />
@@ -43,7 +43,7 @@ export function TodoList({ projectId, title }: { projectId?: number; title?: str
       ) : (
         <>
           <ul className="mt-3 divide-y divide-line">
-            {open.map((t) => <TodoRow key={t.id} todo={t} today={today} onToggle={toggle} onDelete={() => remove.mutate(t.id)} showOwner={!!projectId} />)}
+            {open.map((t) => <TodoRow key={t.id} todo={t} today={today} readOnly={readOnly} onToggle={toggle} onDelete={() => remove.mutate(t.id)} showOwner={!!projectId} />)}
           </ul>
           {done.length > 0 && (
             <div className="mt-2">
@@ -53,7 +53,7 @@ export function TodoList({ projectId, title }: { projectId?: number; title?: str
               </button>
               {showDone && (
                 <ul className="divide-y divide-line">
-                  {done.map((t) => <TodoRow key={t.id} todo={t} today={today} onToggle={toggle} onDelete={() => remove.mutate(t.id)} showOwner={!!projectId} />)}
+                  {done.map((t) => <TodoRow key={t.id} todo={t} today={today} readOnly={readOnly} onToggle={toggle} onDelete={() => remove.mutate(t.id)} showOwner={!!projectId} />)}
                 </ul>
               )}
             </div>
@@ -64,11 +64,11 @@ export function TodoList({ projectId, title }: { projectId?: number; title?: str
   );
 }
 
-function TodoRow({ todo, today, onToggle, onDelete, showOwner }: { todo: Todo; today: string; onToggle: (t: Todo) => void; onDelete: () => void; showOwner: boolean }) {
+function TodoRow({ todo, today, onToggle, onDelete, showOwner, readOnly }: { todo: Todo; today: string; onToggle: (t: Todo) => void; onDelete: () => void; showOwner: boolean; readOnly: boolean }) {
   const late = !todo.done && todo.dueDate !== null && todo.dueDate < today;
   return (
     <li className="group flex items-center gap-3 py-2.5">
-      <button onClick={() => onToggle(todo)} aria-label={todo.done ? 'Marquer à faire' : 'Marquer comme fait'} className="text-ink-3 transition hover:text-brand-600">
+      <button disabled={readOnly} onClick={() => onToggle(todo)} aria-label={todo.done ? 'Marquer à faire' : 'Marquer comme fait'} className="text-ink-3 transition hover:text-brand-600">
         {todo.done ? <CheckCircle2 className="size-5 text-emerald-500" /> : <Circle className="size-5" />}
       </button>
       <span className={clsx('flex-1 text-sm', todo.done && 'text-ink-3 line-through')}>{todo.title}</span>
@@ -79,9 +79,9 @@ function TodoRow({ todo, today, onToggle, onDelete, showOwner }: { todo: Todo; t
           {todo.dueDate === today ? "Aujourd'hui" : formatDate(todo.dueDate)}
         </span>
       )}
-      <button onClick={onDelete} aria-label="Supprimer" className="rounded p-1 text-ink-3 opacity-0 transition group-hover:opacity-100 hover:text-red-600 focus:opacity-100">
+      {!readOnly && <button onClick={onDelete} aria-label="Supprimer" className="rounded p-1 text-ink-3 opacity-0 transition group-hover:opacity-100 hover:text-red-600 focus:opacity-100">
         <Trash2 className="size-4" />
-      </button>
+      </button>}
     </li>
   );
 }

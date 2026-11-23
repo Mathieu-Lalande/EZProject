@@ -15,11 +15,13 @@ interface TaskModalProps {
   defaultStatus?: TaskStatus;
   open: boolean;
   onClose: () => void;
+  readOnly?: boolean;
+  canDelete?: boolean;
 }
 
 const empty: TaskInput = { title: '', description: '', priority: 'MEDIUM', assigneeId: null, storyPoints: null, dueDate: null };
 
-export function TaskModal({ projectId, task, defaultStatus = 'TODO', open, onClose }: TaskModalProps) {
+export function TaskModal({ projectId, task, defaultStatus = 'TODO', open, onClose, readOnly = false, canDelete = false }: TaskModalProps) {
   const { data: users = [] } = useUsers();
   const save = useSaveTask(projectId);
   const remove = useDeleteTask(projectId);
@@ -62,21 +64,22 @@ export function TaskModal({ projectId, task, defaultStatus = 'TODO', open, onClo
     <Modal
       open={open}
       onClose={onClose}
-      title={task ? 'Modifier la tâche' : 'Nouvelle tâche'}
+      title={readOnly ? 'Détail de la tâche' : task ? 'Modifier la tâche' : 'Nouvelle tâche'}
       size="lg"
       footer={
         <>
-          {task && (
+          {task && canDelete && (
             <Button variant="ghost" className="mr-auto text-red-600" icon={<Trash2 className="size-4" />} onClick={onDelete}>
               Supprimer
             </Button>
           )}
-          <Button variant="secondary" onClick={onClose}>Annuler</Button>
-          <Button type="submit" form="task-form" loading={save.isPending}>Enregistrer</Button>
+          <Button variant="secondary" onClick={onClose}>{readOnly ? 'Fermer' : 'Annuler'}</Button>
+          {!readOnly && <Button type="submit" form="task-form" loading={save.isPending}>Enregistrer</Button>}
         </>
       }
     >
       <form id="task-form" onSubmit={submit} className="grid gap-4 sm:grid-cols-2">
+        <fieldset disabled={readOnly} className="contents">
         <Field label="Titre" error={errors.title} className="sm:col-span-2">
           <input className="input" required maxLength={200} value={form.title} onChange={(e) => set('title', e.target.value)} />
         </Field>
@@ -105,6 +108,7 @@ export function TaskModal({ projectId, task, defaultStatus = 'TODO', open, onClo
         <Field label="Story points" error={errors.storyPoints}>
           <input className="input" type="number" min={0} max={1000} value={form.storyPoints ?? ''} onChange={(e) => set('storyPoints', e.target.value === '' ? null : Number(e.target.value))} />
         </Field>
+        </fieldset>
       </form>
     </Modal>
   );

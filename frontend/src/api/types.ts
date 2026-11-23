@@ -1,4 +1,24 @@
-export type Role = 'ADMIN' | 'MANAGER' | 'MEMBER';
+export type Role = 'OWNER' | 'ADMIN' | 'MANAGER' | 'MEMBER' | 'GUEST';
+export type ProjectRole = 'LEAD' | 'CONTRIBUTOR' | 'VIEWER';
+export type Visibility = 'ORGANIZATION' | 'TEAM' | 'RESTRICTED';
+export type ProjectPriority = 'P1' | 'P2' | 'P3' | 'P4';
+export type Plan = 'FREE' | 'TEAM' | 'ENTERPRISE';
+export type Permission =
+  | 'PROJECT_EDIT'
+  | 'PROJECT_MODULES'
+  | 'PROJECT_MEMBERS'
+  | 'PROJECT_DELETE'
+  | 'TASK_VIEW'
+  | 'TASK_CREATE'
+  | 'TASK_EDIT'
+  | 'TASK_DELETE'
+  | 'TODO_VIEW'
+  | 'TODO_EDIT'
+  | 'RETRO_VIEW'
+  | 'RETRO_EDIT'
+  | 'POKER_VIEW'
+  | 'POKER_VOTE'
+  | 'POKER_FACILITATE';
 export type ProjectType = 'DEVELOPMENT' | 'CONSULTING' | 'INTERNAL';
 export type ProjectStatus = 'PLANNED' | 'ACTIVE' | 'ON_HOLD' | 'COMPLETED' | 'CANCELLED';
 export type Health = 'GREEN' | 'AMBER' | 'RED';
@@ -17,6 +37,11 @@ export interface User {
   jobTitle: string | null;
 }
 
+export interface Me extends User {
+  organization: { id: number; name: string; slug: string; plan: Plan };
+  teams: { teamId: number; teamName: string; role: ProjectRole }[];
+}
+
 export interface Project {
   id: number;
   code: string;
@@ -25,13 +50,77 @@ export interface Project {
   client: string | null;
   type: ProjectType;
   status: ProjectStatus;
+  statusReason: string | null;
+  priority: ProjectPriority;
   health: Health;
   color: string;
   owner: User | null;
+  team: { id: number; name: string; color: string } | null;
+  visibility: Visibility;
   startDate: string | null;
   endDate: string | null;
   budgetDays: number | null;
   modules: ModuleType[];
+  /** null lorsque l'utilisateur est administrateur (accès complet). */
+  myRole: ProjectRole | null;
+  myPermissions: Permission[];
+}
+
+export interface StatusChange {
+  id: number;
+  fromStatus: ProjectStatus | null;
+  toStatus: ProjectStatus;
+  reason: string | null;
+  changedBy: string | null;
+  changedAt: string;
+}
+
+export interface Team {
+  id: number;
+  name: string;
+  description: string | null;
+  color: string;
+  canManage: boolean;
+  members: { userId: number; displayName: string; email: string; jobTitle: string | null; role: ProjectRole }[];
+}
+
+export interface ProjectMember {
+  userId: number;
+  displayName: string;
+  email: string;
+  orgRole: Role;
+  role: ProjectRole;
+}
+
+export interface ProjectMembers {
+  teamName: string | null;
+  visibility: Visibility;
+  teamMembers: ProjectMember[];
+  explicitMembers: ProjectMember[];
+}
+
+export interface PermissionMatrix {
+  customized: boolean;
+  roles: Record<ProjectRole, Permission[]>;
+}
+
+export interface Organization {
+  id: number;
+  name: string;
+  slug: string;
+  plan: Plan;
+  usage: { projects: number; maxProjects: number; users: number; maxUsers: number; customPermissions: boolean };
+}
+
+export interface ImportReport {
+  dryRun: boolean;
+  applied: boolean;
+  rows: number;
+  created: number;
+  updated: number;
+  teamsCreated: number;
+  errors: { line: number; message: string }[];
+  preview: string[];
 }
 
 export interface ProjectInput {
@@ -41,9 +130,13 @@ export interface ProjectInput {
   client?: string | null;
   type: ProjectType;
   status?: ProjectStatus;
+  statusReason?: string | null;
+  priority?: ProjectPriority;
   health?: Health;
   color?: string;
   ownerId?: number | null;
+  teamId?: number | null;
+  visibility?: Visibility;
   startDate?: string | null;
   endDate?: string | null;
   budgetDays?: number | null;
@@ -137,9 +230,13 @@ export interface ProjectSummary {
   client: string | null;
   type: ProjectType;
   status: ProjectStatus;
+  statusReason: string | null;
+  priority: ProjectPriority;
   health: Health;
   color: string;
   ownerName: string | null;
+  teamId: number | null;
+  teamName: string | null;
   startDate: string | null;
   endDate: string | null;
   daysRemaining: number | null;
@@ -153,9 +250,13 @@ export interface ProjectSummary {
 }
 
 export interface Portfolio {
+  scope: 'ORGANIZATION' | 'MY_PROJECTS';
+  teams: { id: number; name: string; color: string; openProjects: number; atRiskProjects: number }[];
   kpis: {
     openProjects: number;
     atRiskProjects: number;
+    onHoldProjects: number;
+    p1Projects: number;
     openTasks: number;
     overdueTasks: number;
     completedLast7Days: number;
