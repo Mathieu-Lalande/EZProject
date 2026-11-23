@@ -30,6 +30,12 @@ public class MfaController {
     private final RateLimiter limiter;
     private final RateLimitProperties limits;
     private final AuditService audit;
+    private com.ezproject.observability.AppMetrics metrics;
+
+    @org.springframework.beans.factory.annotation.Autowired
+    void setMetrics(com.ezproject.observability.AppMetrics metrics) {
+        this.metrics = metrics;
+    }
 
     public MfaController(MfaService service, UserService userService, RateLimiter limiter, RateLimitProperties limits,
                          AuditService audit) {
@@ -87,10 +93,12 @@ public class MfaController {
         }
         if (!service.verifyLogin(user, request.code())) {
             limiter.tryConsume("mfa", limits.loginAccount(), user.getEmail());
+            metrics.mfa("failure");
             audit.record(user.getOrganization(), user, "MFA_FAILED", "USER", user.getId(), "Code de double authentification incorrect");
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
         }
         limiter.reset("mfa", user.getEmail());
+        metrics.mfa("success");
         session.removeAttribute(MfaService.PENDING_ATTRIBUTE);
         http.changeSessionId();
         audit.record(user.getOrganization(), user, "MFA_VERIFIED", "USER", user.getId(), "Connexion à deux facteurs");

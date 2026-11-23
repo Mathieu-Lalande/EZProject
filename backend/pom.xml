@@ -50,6 +50,11 @@
             <groupId>org.flywaydb</groupId>
             <artifactId>flyway-database-postgresql</artifactId>
         </dependency>
+        <!-- Métriques au format Prometheus (/actuator/prometheus) ; version gérée par Spring Boot -->
+        <dependency>
+            <groupId>io.micrometer</groupId>
+            <artifactId>micrometer-registry-prometheus</artifactId>
+        </dependency>
         <!-- Cache borné pour les compteurs anti-abus (version gérée par Spring Boot) -->
         <dependency>
             <groupId>com.github.ben-manes.caffeine</groupId>

@@ -1,6 +1,8 @@
 package com.ezproject.security;
 
-import org.springframework.security.core.userdetails.User;
+import java.util.List;
+
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
@@ -20,12 +22,11 @@ class AppUserDetailsService implements UserDetailsService {
     @Override
     public UserDetails loadUserByUsername(String email) {
         return repository.findByEmailIgnoreCase(email)
-                .map(u -> User.withUsername(u.getEmail())
-                        .password(u.getPasswordHash())
-                        .roles(u.getRole().name())
+                .map(u -> new TenantPrincipal(u.getEmail(), u.getPasswordHash(),
                         // Compte désactivé ou supprimé : connexion refusée (DisabledException -> 401)
-                        .disabled(!u.isActive() || u.isDeleted())
-                        .build())
+                        u.isActive() && !u.isDeleted(),
+                        List.of(new SimpleGrantedAuthority("ROLE_" + u.getRole().name())),
+                        u.getOrganization().getId()))
                 .orElseThrow(() -> new UsernameNotFoundException("Identifiants invalides"));
     }
 }

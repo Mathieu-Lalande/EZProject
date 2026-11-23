@@ -9,6 +9,8 @@ spring:
       ddl-auto: validate
   flyway:
     enabled: true
+    # Migrations communes + migrations propres au SGBD (ex. Row-Level Security pour PostgreSQL)
+    locations: classpath:db/migration,classpath:db/vendor/{vendor}
   servlet:
     multipart:
       # Pièces jointes (5 Mo) ; l'import CSV applique en plus sa propre limite de 2 Mo
@@ -31,9 +33,23 @@ management:
   endpoints:
     web:
       exposure:
-        include: health
+        # /actuator/prometheus est en plus protégé par jeton (METRICS_TOKEN), voir MetricsTokenFilter
+        include: health,prometheus
+  endpoint:
+    health:
+      probes:
+        enabled: true
+  metrics:
+    tags:
+      application: ezproject
 
 app:
+  rls:
+    # Row-Level Security PostgreSQL (sans effet sur H2)
+    enabled: ${RLS_ENABLED:true}
+  metrics:
+    # Jeton exigé par /actuator/prometheus (Authorization: Bearer ...). Vide = endpoint désactivé.
+    token: ${METRICS_TOKEN:}
   mfa:
     # 32 octets en Base64 (ex. : openssl rand -base64 32). Sans clé, la double authentification est indisponible.
     encryption-key: ${MFA_ENCRYPTION_KEY:}

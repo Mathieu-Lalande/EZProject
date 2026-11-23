@@ -71,6 +71,7 @@ public class AccountService {
     }
 
     /** Droit à la portabilité : toutes les données personnelles de l'utilisateur, en JSON. */
+    @Transactional // pas en lecture seule : l'export est tracé dans le journal d'audit
     public Map<String, Object> exportMyData() {
         AppUser me = currentUser.get();
         Map<String, Object> data = new LinkedHashMap<>();

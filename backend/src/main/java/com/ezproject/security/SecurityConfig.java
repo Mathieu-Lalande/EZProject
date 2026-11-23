@@ -42,11 +42,15 @@ public class SecurityConfig {
 
     @Bean
     SecurityFilterChain securityFilterChain(HttpSecurity http, RateLimiter rateLimiter, LoginThrottle loginThrottle,
-                                            RateLimitProperties rateLimits, AppUserRepository users) throws Exception {
+                                            RateLimitProperties rateLimits, AppUserRepository users,
+                                            com.ezproject.observability.AppMetrics metrics,
+                                            @Value("${app.metrics.token:}") String metricsToken) throws Exception {
         http
+            .addFilterBefore(new com.ezproject.observability.MetricsTokenFilter(metricsToken),
+                    org.springframework.security.web.context.SecurityContextHolderFilter.class)
             .addFilterAfter(new AccountStatusFilter(users), AuthorizationFilter.class)
             // Instancié ici (et non comme @Bean) pour qu'il ne soit pas enregistré une seconde fois comme filtre servlet
-            .addFilterBefore(new RateLimitFilter(rateLimiter, loginThrottle, rateLimits),
+            .addFilterBefore(new RateLimitFilter(rateLimiter, loginThrottle, rateLimits, metrics),
                     UsernamePasswordAuthenticationFilter.class)
             .cors(cors -> { })
             .csrf(csrf -> csrf
@@ -54,7 +58,7 @@ public class SecurityConfig {
                 .csrfTokenRequestHandler(new SpaCsrfTokenRequestHandler()))
             .authorizeHttpRequests(auth -> auth
                 .requestMatchers(HttpMethod.POST, "/api/auth/login", "/api/auth/signup").permitAll()
-                .requestMatchers("/actuator/health").permitAll()
+                .requestMatchers("/actuator/health", "/actuator/health/**").permitAll()
                 .requestMatchers("/api/**").authenticated()
                 .anyRequest().permitAll())
             .headers(headers -> headers
@@ -71,6 +75,7 @@ public class SecurityConfig {
                 .successHandler((req, res, auth) -> {
                     loginThrottle.recordSuccess(req.getParameter("email"));
                     boolean mfa = users.findByEmailIgnoreCase(auth.getName()).map(u -> u.isMfaEnabled()).orElse(false);
+                    metrics.login(mfa ? "mfa_required" : "success");
                     if (mfa) {
                         // Mot de passe validé : la session reste bloquée jusqu'au second facteur
                         req.getSession().setAttribute(com.ezproject.mfa.MfaService.PENDING_ATTRIBUTE, Boolean.TRUE);
@@ -83,6 +88,7 @@ public class SecurityConfig {
                 })
                 .failureHandler((req, res, ex) -> {
                     loginThrottle.recordFailure(req.getParameter("email"));
+                    metrics.login("failure");
                     res.sendError(HttpStatus.UNAUTHORIZED.value());
                 }))
             .logout(logout -> logout

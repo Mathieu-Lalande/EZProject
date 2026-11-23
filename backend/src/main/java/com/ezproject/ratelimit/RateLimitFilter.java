@@ -33,8 +33,11 @@ public class RateLimitFilter extends OncePerRequestFilter {
     private final RateLimiter limiter;
     private final LoginThrottle loginThrottle;
     private final RateLimitProperties props;
+    private final com.ezproject.observability.AppMetrics metrics;
 
-    public RateLimitFilter(RateLimiter limiter, LoginThrottle loginThrottle, RateLimitProperties props) {
+    public RateLimitFilter(RateLimiter limiter, LoginThrottle loginThrottle, RateLimitProperties props,
+                           com.ezproject.observability.AppMetrics metrics) {
+        this.metrics = metrics;
         this.limiter = limiter;
         this.loginThrottle = loginThrottle;
         this.props = props;
@@ -52,21 +55,28 @@ public class RateLimitFilter extends OncePerRequestFilter {
         boolean post = HttpMethod.POST.matches(request.getMethod());
         String ip = request.getRemoteAddr();
         RateLimiter.Decision decision;
+        String policy;
 
         if (post && uri.equals("/api/auth/login")) {
+            policy = "login-ip";
             decision = limiter.tryConsume("login-ip", props.loginIp(), ip);
             if (decision.allowed()) {
+                policy = "login-account";
                 decision = loginThrottle.check(request.getParameter("email"));
             }
         } else if (post && uri.equals("/api/auth/signup")) {
+            policy = "signup-ip";
             decision = limiter.tryConsume("signup-ip", props.signupIp(), ip);
         } else {
             String user = authenticatedUser();
             if (user == null) {
+                policy = "api-ip";
                 decision = limiter.tryConsume("api-ip", props.apiAnonymous(), ip);
             } else if (post && uri.startsWith("/api/import/")) {
+                policy = "import-user";
                 decision = limiter.tryConsume("import-user", props.importUser(), user);
             } else {
+                policy = "api-user";
                 decision = limiter.tryConsume("api-user", props.apiUser(), user);
             }
         }
@@ -74,6 +84,7 @@ public class RateLimitFilter extends OncePerRequestFilter {
         if (decision.allowed()) {
             chain.doFilter(request, response);
         } else {
+            metrics.rateLimited(policy);
             reject(response, decision.retryAfterSeconds());
         }
     }

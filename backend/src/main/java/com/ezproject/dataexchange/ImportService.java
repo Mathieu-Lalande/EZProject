@@ -86,6 +86,12 @@ public class ImportService {
     private final Validator validator;
     private final TransactionTemplate transaction;
     private final AuditService audit;
+    private com.ezproject.observability.AppMetrics metrics;
+
+    @org.springframework.beans.factory.annotation.Autowired
+    void setMetrics(com.ezproject.observability.AppMetrics metrics) {
+        this.metrics = metrics;
+    }
 
     public ImportService(ProjectService projectService, ProjectRepository projectRepository, TaskService taskService,
                          TeamService teamService, TeamRepository teamRepository, UserService userService,
@@ -202,6 +208,9 @@ public class ImportService {
     private ImportReport finish(org.springframework.transaction.TransactionStatus tx, boolean dryRun, int rows,
                                 Counters c) {
         boolean applied = !dryRun && c.errors.isEmpty();
+        if (metrics != null && !dryRun) {
+            metrics.imported("csv", applied);
+        }
         if (!applied) {
             tx.setRollbackOnly();
         } else {

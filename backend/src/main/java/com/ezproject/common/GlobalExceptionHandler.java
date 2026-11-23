@@ -47,6 +47,13 @@ public class GlobalExceptionHandler {
         return ProblemDetail.forStatusAndDetail(HttpStatus.FORBIDDEN, "Accès refusé");
     }
 
+    /** Contrainte d'unicité violée (ex. email déjà utilisé dans une autre organisation, invisible sous RLS). */
+    @ExceptionHandler(org.springframework.dao.DataIntegrityViolationException.class)
+    ProblemDetail conflict(org.springframework.dao.DataIntegrityViolationException ex) {
+        log.info("Violation de contrainte : {}", ex.getMostSpecificCause().getMessage());
+        return ProblemDetail.forStatusAndDetail(HttpStatus.CONFLICT, "Cette valeur est déjà utilisée (doublon)");
+    }
+
     @ExceptionHandler(MaxUploadSizeExceededException.class)
     ProblemDetail tooLarge(MaxUploadSizeExceededException ex) {
         return ProblemDetail.forStatusAndDetail(HttpStatus.PAYLOAD_TOO_LARGE, "Fichier trop volumineux");

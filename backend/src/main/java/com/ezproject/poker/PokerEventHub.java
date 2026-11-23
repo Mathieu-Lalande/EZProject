@@ -58,6 +58,10 @@ public class PokerEventHub {
         emitters.values().forEach(set -> set.forEach(e -> send(e, "ping", "{}")));
     }
 
+    public double totalConnections() {
+        return emitters.values().stream().mapToInt(Set::size).sum();
+    }
+
     int connections(Long projectId) {
         return emitters.getOrDefault(projectId, Set.of()).size();
     }

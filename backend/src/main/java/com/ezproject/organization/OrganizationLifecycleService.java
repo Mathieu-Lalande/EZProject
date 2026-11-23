@@ -40,6 +40,7 @@ public class OrganizationLifecycleService {
     }
 
     /** Export JSON de toutes les données de l'organisation (sans hash de mot de passe ni secret). */
+    @Transactional // pas en lecture seule : l'export est tracé dans le journal d'audit
     public Map<String, Object> export() {
         AppUser me = currentUser.get();
         if (!me.getRole().isAdmin()) {
