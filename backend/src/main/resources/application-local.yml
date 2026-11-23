@@ -1,0 +1,17 @@
+# Exécution locale "comme en prod" : PostgreSQL persistant (docker compose) + comptes de démonstration.
+# Les valeurs par défaut ne conviennent qu'à une base locale jetable : ne pas utiliser en production.
+spring:
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/ezproject}
+    username: ${DB_USERNAME:ezproject}
+    password: ${DB_PASSWORD:ezproject-local}
+
+app:
+  seed:
+    # Données de démo créées au premier démarrage uniquement (base vide). SEED_DEMO=false pour partir d'une base vierge.
+    enabled: ${SEED_DEMO:true}
+    demo-password: ${DEMO_PASSWORD:demo1234}
+  bootstrap-admin:
+    email: ${ADMIN_EMAIL:}
+    password: ${ADMIN_PASSWORD:}
+    organization: ${ADMIN_ORGANIZATION:Mon organisation}

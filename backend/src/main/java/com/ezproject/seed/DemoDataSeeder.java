@@ -108,13 +108,7 @@ class DemoDataSeeder implements ApplicationRunner {
         hash = encoder.encode(demoPassword);
         LocalDate today = LocalDate.now(clock);
 
-        // L'organisation par défaut créée par la migration V2 devient l'organisation de démo
-        Organization horizon = organizations.findAll().stream().findFirst()
-                .orElseGet(() -> organizations.save(new Organization("Horizon Conseil", "horizon", Plan.TEAM)));
-        horizon.rename("Horizon Conseil");
-        horizon.changePlan(Plan.TEAM);
-        teams.findByOrganizationIdOrderByNameAsc(horizon.getId()).forEach(teams::delete);
-        teams.flush();
+        Organization horizon = organizations.save(new Organization("Horizon Conseil", "horizon", Plan.TEAM));
 
         AppUser camille = user(horizon, "camille", "Camille Martin", Role.OWNER, "COO");
         AppUser lea = user(horizon, "lea", "Léa Dubois", Role.MANAGER, "PMO");

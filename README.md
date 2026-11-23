@@ -42,16 +42,43 @@ Outil SaaS de gestion de projets **multi-organisation** et **modulable**, conçu
 - **Frontend** : React 19, TypeScript strict, Vite 7, Tailwind CSS 4, TanStack Query 5, React Router 7, dnd-kit, lucide-react.
 - **Tests** : JUnit 5, AssertJ, Spring Boot Test + MockMvc, spring-security-test ; Vitest + Testing Library.
 
-## Démarrage rapide (dev)
+## Lancer en local
+
+Trois façons, de la plus « dev » à la plus proche de la production. Les **comptes de démo** sont créés automatiquement au premier démarrage (profils `dev` et `local`).
+
+### 1. Développement (rechargement à chaud)
 
 Prérequis : JDK 21, Maven 3.9+, Node 22+.
 
 ```bash
-cd backend && mvn spring-boot:run           # API :8080, base H2 en mémoire + données de démo
+cd backend && mvn spring-boot:run           # API :8080, profil dev : base H2 en mémoire (remise à zéro à chaque démarrage)
 cd frontend && npm install && npm run dev   # UI http://localhost:5173 (proxy /api -> 8080)
 ```
 
-Comptes de démonstration (profil `dev` uniquement). Mot de passe : `demo1234`, modifiable via la variable `DEMO_PASSWORD`.
+### 2. Local « comme en prod » : PostgreSQL + jar unique
+
+Les données sont **conservées** entre les redémarrages. L'API et l'interface sont servies par le même jar sur http://localhost:8080.
+
+```bash
+docker compose up -d db                                   # PostgreSQL 17 local
+cd backend && mvn -Pfullstack package                     # construit l'interface et l'embarque dans le jar
+java -jar target/ezproject-backend-0.1.0-SNAPSHOT.jar --spring.profiles.active=local
+```
+
+Sous Windows, ajoutez `-Dnpm=npm.cmd` à la commande Maven.
+
+### 3. Tout en Docker
+
+```bash
+cp .env.example .env        # optionnel : changer les mots de passe locaux
+docker compose up --build   # http://localhost:8080
+```
+
+Pour repartir de zéro : `docker compose down -v` (supprime aussi le volume de la base).
+
+### Comptes de démonstration
+
+Mot de passe : `demo1234`, modifiable via la variable `DEMO_PASSWORD`. Pour une base sans données de démo, mettez `SEED_DEMO=false` et définissez `ADMIN_EMAIL` / `ADMIN_PASSWORD`.
 
 | Compte | Organisation | Rôle | Ce qu'il illustre |
 |---|---|---|---|
@@ -78,30 +105,29 @@ Menu **Organisation → Import / export** : télécharger le modèle, le remplir
 ## Tests
 
 ```bash
-cd backend && mvn verify     # 45 tests : règles d'accès, isolation multi-organisation, matrice, statuts, quotas, import/export, sécurité
+cd backend && mvn verify     # 53 tests : règles d'accès, isolation multi-organisation, matrice, statuts, quotas, import/export, anti-abus, sécurité
 cd frontend && npm test      # 15 tests : client HTTP (CSRF), permissions, motif obligatoire, composants
 cd frontend && npm run build # typecheck strict + build
 ```
 
-## Production
+## Mise en production
 
-Profil `prod` : PostgreSQL et secrets **uniquement via variables d'environnement**.
+L'image Docker (`Dockerfile` à la racine) contient l'API et l'interface ; le profil `prod` ne crée **aucun compte de démo**.
 
-```bash
-export DB_URL=jdbc:postgresql://localhost:5432/ezproject DB_USERNAME=... DB_PASSWORD=...
-export ADMIN_EMAIL=admin@exemple.fr ADMIN_PASSWORD='<12 caractères minimum>' ADMIN_ORGANIZATION='Mon entreprise'
-export APP_CORS_ALLOWED_ORIGINS=https://ezproject.exemple.fr
-docker compose up -d
-cd backend && mvn package && java -jar target/ezproject-backend-0.1.0-SNAPSHOT.jar --spring.profiles.active=prod
-cd frontend && npm run build    # dist/ à servir sous le même domaine que /api
-```
+| Variable | Rôle |
+|---|---|
+| `SPRING_PROFILES_ACTIVE=prod` | Profil de production : cookie de session `Secure`, aucune donnée de démo |
+| `DB_URL`, `DB_USERNAME`, `DB_PASSWORD` | Base PostgreSQL (13+) |
+| `ADMIN_EMAIL`, `ADMIN_PASSWORD`, `ADMIN_ORGANIZATION` | Premier propriétaire, créé si la base est vide (offre Enterprise) |
+| `FORWARD_HEADERS_STRATEGY=native` | À activer derrière un reverse proxy de confiance, pour la vraie IP client (anti-abus) et la détection HTTPS |
 
-`ADMIN_*` crée la première organisation (offre Enterprise) si la base est vide. C'est le mode d'installation auto-hébergé.
-
-**Migrations.**
-- `V2` fait passer une base existante en multi-organisation sans perte : les utilisateurs et projets sont rattachés à une organisation et une équipe par défaut, et le premier administrateur devient propriétaire.
-- `V3` est une migration Java : elle rend le code projet unique par organisation.
-- La montée de version V1 → V3 a été vérifiée sur PostgreSQL 16 avec des données existantes.
+- **Déploiement** : servez l'application en **HTTPS** (cookie `Secure`) derrière un reverse proxy qui termine TLS.
+- **Création des comptes** : ensuite, chaque organisation se crée via `/signup`, et les comptes sont ajoutés par les administrateurs (Organisation → Membres).
+- **Migrations** :
+  - `V2` passe une base existante en multi-organisation sans perte.
+  - `V3` (migration Java) rend le code projet unique par organisation.
+  - `V4` retire l'organisation vide d'une installation neuve.
+  - La montée de version V1 → V4 a été vérifiée sur PostgreSQL 16.
 
 ## Architecture
 
@@ -114,9 +140,10 @@ backend/src/main/java/com/ezproject
 ├── task/ todo/ retroplanning/ poker/   modules projet (contrôlés par ProjectAccessService)
 ├── portfolio/      agrégation multi-projets selon le périmètre visible
 ├── dataexchange/   import CSV transactionnel, export CSV (anti-injection de formules)
-├── security/       session + CSRF SPA, utilisateur courant, amorçage admin
+├── security/       session + CSRF SPA, en-têtes (CSP), utilisateur courant, amorçage admin
+├── ratelimit/      limitation anti-abus (seaux à jetons, blocage de compte)
 └── seed/           données de démo (profil dev)
-db/migration        V1, V2 (SQL) et V3 (Java)
+db/migration        V1, V2, V4 (SQL) et V3 (Java)
 ```
 
 ## Sécurité
@@ -130,12 +157,24 @@ db/migration        V1, V2 (SQL) et V3 (Java)
   - les messages d'erreur techniques ne sont pas exposés.
 - **Export** : protection contre l'**injection de formules CSV** (OWASP), avec les préfixes `= + - @` neutralisés.
 - **Mots de passe** : `DelegatingPasswordEncoder` (bcrypt), 12 caractères minimum.
+- **Limitation anti-abus** (réponse `429` + `Retry-After`, limites dans `app.rate-limit.*`) :
 
-### Limites connues / prochaines étapes
+  | Protection | Limite par défaut |
+  |---|---|
+  | Tentatives de connexion par IP | 20 / 10 min |
+  | Échecs de connexion par compte (blocage, même depuis d'autres IP) | 5 / 15 min |
+  | Inscriptions par IP | 5 / heure |
+  | Imports CSV par utilisateur | 20 / heure |
+  | API par utilisateur connecté | 600 / min |
+  | API anonyme par IP | 120 / min |
 
-- **Facturation** non branchée : le changement d'offre est immédiat et réservé au propriétaire. L'étape suivante serait un prestataire de paiement avec webhooks.
-- **Invitations par email** (lien à usage unique) à la place de la création de comptes avec mot de passe initial.
-- Un utilisateur appartient à **une seule organisation**. Le multi-appartenance demanderait un sélecteur d'organisation.
-- **Pas de limitation de débit** sur `/api/auth/login` et `/api/auth/signup` : à ajouter avant une ouverture publique (Bucket4j, reverse proxy).
+  Les échecs sont comptés aussi pour les emails inexistants, pour ne pas révéler quels comptes existent. Une connexion réussie remet le compteur à zéro.
+- **En-têtes** : `Content-Security-Policy` stricte (aucun script inline), `X-Frame-Options: DENY`, `Referrer-Policy: same-origin`.
+
+### Choix assumés et prochaines étapes
+
+- **Une personne appartient à une seule organisation** : l'email est unique sur toute la plateforme.
+- **Facturation et emails** sont prévus dans un second temps : changement d'offre réservé au propriétaire et sans paiement, création des comptes par un administrateur avec mot de passe initial (pas encore d'invitation par lien).
+- Les compteurs anti-abus sont **en mémoire, par instance** : avec plusieurs instances, il faudra un stockage partagé (Redis).
 - **Isolation multi-organisation applicative**, faite dans les services. Pour du SaaS à grande échelle, envisager en plus le *Row-Level Security* PostgreSQL.
 - Planning poker en polling toutes les 2 s ; jours fériés non gérés dans le rétro-planning.

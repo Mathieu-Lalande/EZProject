@@ -13,11 +13,17 @@ import org.springframework.security.crypto.factory.PasswordEncoderFactories;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.HttpStatusEntryPoint;
+import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 import org.springframework.security.web.authentication.logout.HttpStatusReturningLogoutSuccessHandler;
 import org.springframework.security.web.csrf.CookieCsrfTokenRepository;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
+
+import com.ezproject.ratelimit.LoginThrottle;
+import com.ezproject.ratelimit.RateLimitFilter;
+import com.ezproject.ratelimit.RateLimitProperties;
+import com.ezproject.ratelimit.RateLimiter;
 
 /**
  * Authentification par session (cookie HttpOnly) + CSRF cookie-to-header pour la SPA React.
@@ -27,9 +33,18 @@ import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 @EnableMethodSecurity
 public class SecurityConfig {
 
+    static final String CONTENT_SECURITY_POLICY = "default-src 'self'; script-src 'self'; "
+            + "style-src 'self' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; "
+            + "img-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'self'; "
+            + "form-action 'self'; frame-ancestors 'none'";
+
     @Bean
-    SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
+    SecurityFilterChain securityFilterChain(HttpSecurity http, RateLimiter rateLimiter, LoginThrottle loginThrottle,
+                                            RateLimitProperties rateLimits) throws Exception {
         http
+            // Instancié ici (et non comme @Bean) pour qu'il ne soit pas enregistré une seconde fois comme filtre servlet
+            .addFilterBefore(new RateLimitFilter(rateLimiter, loginThrottle, rateLimits),
+                    UsernamePasswordAuthenticationFilter.class)
             .cors(cors -> { })
             .csrf(csrf -> csrf
                 .csrfTokenRepository(CookieCsrfTokenRepository.withHttpOnlyFalse())
@@ -39,12 +54,25 @@ public class SecurityConfig {
                 .requestMatchers("/actuator/health").permitAll()
                 .requestMatchers("/api/**").authenticated()
                 .anyRequest().permitAll())
+            .headers(headers -> headers
+                // CSP stricte pour l'interface servie par le jar : aucun script inline ni domaine tiers hors polices
+                .contentSecurityPolicy(csp -> csp.policyDirectives(CONTENT_SECURITY_POLICY))
+                .referrerPolicy(referrer -> referrer.policy(
+                        org.springframework.security.web.header.writers.ReferrerPolicyHeaderWriter.ReferrerPolicy.SAME_ORIGIN)))
             .formLogin(form -> form
+                // Page de connexion fournie par la SPA : désactive la page de login générée par Spring Security
+                .loginPage("/login")
                 .loginProcessingUrl("/api/auth/login")
                 .usernameParameter("email")
                 .passwordParameter("password")
-                .successHandler((req, res, auth) -> res.setStatus(HttpStatus.NO_CONTENT.value()))
-                .failureHandler((req, res, ex) -> res.sendError(HttpStatus.UNAUTHORIZED.value())))
+                .successHandler((req, res, auth) -> {
+                    loginThrottle.recordSuccess(req.getParameter("email"));
+                    res.setStatus(HttpStatus.NO_CONTENT.value());
+                })
+                .failureHandler((req, res, ex) -> {
+                    loginThrottle.recordFailure(req.getParameter("email"));
+                    res.sendError(HttpStatus.UNAUTHORIZED.value());
+                }))
             .logout(logout -> logout
                 .logoutUrl("/api/auth/logout")
                 .logoutSuccessHandler(new HttpStatusReturningLogoutSuccessHandler(HttpStatus.NO_CONTENT)))

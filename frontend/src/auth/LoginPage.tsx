@@ -2,6 +2,7 @@ import { useState, type FormEvent } from 'react';
 import { Link, Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { LayoutGrid, KanbanSquare, CalendarClock, Spade } from 'lucide-react';
 import { useLogin, useMe } from '../api/hooks';
+import { ApiError } from '../api/client';
 import { Button } from '../components/ui/Button';
 import { Field } from '../components/ui/Field';
 
@@ -67,7 +68,11 @@ export function LoginPage() {
             <Field label="Mot de passe">
               <input className="input" type="password" autoComplete="current-password" required value={password} onChange={(e) => setPassword(e.target.value)} />
             </Field>
-            {login.isError && <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700 dark:bg-red-500/10 dark:text-red-300">Email ou mot de passe incorrect.</p>}
+            {login.isError && (
+              <p role="alert" className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700 dark:bg-red-500/10 dark:text-red-300">
+                {login.error instanceof ApiError && login.error.status === 429 ? login.error.message : 'Email ou mot de passe incorrect.'}
+              </p>
+            )}
             <Button type="submit" className="w-full" loading={login.isPending}>Se connecter</Button>
           </div>
           <p className="mt-6 text-center text-sm text-ink-3">

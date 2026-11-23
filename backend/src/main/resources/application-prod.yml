@@ -5,6 +5,9 @@ spring:
     password: ${DB_PASSWORD}
 
 server:
+  # Derrière un reverse proxy de confiance (nginx, load balancer) : FORWARD_HEADERS_STRATEGY=native
+  # pour que l'IP client (limitation anti-abus) et le schéma HTTPS soient correctement détectés.
+  forward-headers-strategy: ${FORWARD_HEADERS_STRATEGY:none}
   servlet:
     session:
       cookie:
