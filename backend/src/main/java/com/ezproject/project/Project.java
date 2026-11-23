@@ -151,6 +151,12 @@ public class Project {
         touch();
     }
 
+    /** Météo publiée dans un rapport d'avancement : devient la météo courante du projet. */
+    public void changeHealth(Health newHealth) {
+        this.health = newHealth;
+        touch();
+    }
+
     public void prioritize(ProjectPriority newPriority) {
         this.priority = newPriority;
         touch();

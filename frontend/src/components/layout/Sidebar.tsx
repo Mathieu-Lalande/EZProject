@@ -1,6 +1,6 @@
 import { NavLink } from 'react-router-dom';
 import clsx from 'clsx';
-import { LayoutDashboard, UserRound, FolderKanban, Building2, Search, Moon, Sun, LogOut, X, PauseCircle, Gauge } from 'lucide-react';
+import { LayoutDashboard, UserRound, FolderKanban, Building2, Search, Moon, Sun, LogOut, X, PauseCircle, Gauge, GanttChartSquare } from 'lucide-react';
 import { useLogout, useMe, useProjects } from '../../api/hooks';
 import { useTheme } from '../../lib/theme';
 import { planLabel, roleLabel } from '../../lib/labels';
@@ -22,6 +22,7 @@ export function Sidebar({ onSearch, mobileOpen, onNavigate }: SidebarProps) {
 
   const nav = [
     { to: '/portfolio', label: 'Portefeuille', icon: LayoutDashboard },
+    { to: '/roadmap', label: 'Roadmap', icon: GanttChartSquare },
     { to: '/me', label: 'Mon espace', icon: UserRound },
     { to: '/projects', label: 'Projets', icon: FolderKanban },
     ...(me?.role !== 'GUEST' ? [{ to: '/capacity', label: 'Capacité', icon: Gauge }] : []),

@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom';
 import { AlertTriangle, Flag, PauseCircle } from 'lucide-react';
+import { TrendIcon } from '../report/WeatherPanel';
 import { PriorityBadge } from '../../components/ui/PriorityBadge';
 import { StatusBadge } from '../../components/ui/StatusBadge';
 import clsx from 'clsx';
@@ -58,7 +59,11 @@ export function ProjectsHealthTable({ projects }: { projects: ProjectSummary[] }
                   )}
                 </td>
                 <td className="px-3 py-3 whitespace-nowrap text-ink-2">{p.ownerName ?? '—'}</td>
-                <td className="px-3 py-3"><HealthBadge health={p.health} /></td>
+                <td className="px-3 py-3">
+                  <span className="flex items-center gap-1"><HealthBadge health={p.health} />{p.latestReport && <TrendIcon trend={p.latestReport.trend} className="size-3.5" />}</span>
+                  {p.reportStale && <span className="mt-1 block text-[11px] text-amber-700 dark:text-amber-300">Météo non mise à jour</span>}
+                  {p.criticalRisks > 0 && <span className="mt-1 block text-[11px] font-medium text-red-600">{p.criticalRisks} risque{p.criticalRisks > 1 ? 's' : ''} critique{p.criticalRisks > 1 ? 's' : ''}</span>}
+                </td>
                 <td className="px-3 py-3">
                   <div className="flex items-center gap-2">
                     <ProgressBar value={p.progress} color={p.color} />

@@ -175,3 +175,21 @@ export const absenceKindLabel: Record<'VACATION' | 'SICK' | 'TRAINING' | 'OTHER'
 };
 
 export const TASK_COLUMNS: TaskStatus[] = ['BACKLOG', 'TODO', 'IN_PROGRESS', 'REVIEW', 'DONE'];
+
+export const trendLabel: Record<'UP' | 'STABLE' | 'DOWN', string> = { UP: 'En amélioration', STABLE: 'Stable', DOWN: 'En dégradation' };
+
+export const riskStatusLabel: Record<'OPEN' | 'MITIGATING' | 'OCCURRED' | 'CLOSED', string> = {
+  OPEN: 'Ouvert',
+  MITIGATING: 'En traitement',
+  OCCURRED: 'Survenu',
+  CLOSED: 'Clos',
+};
+
+export const decisionStatusLabel: Record<'PROPOSED' | 'APPROVED' | 'REJECTED', string> = {
+  PROPOSED: 'À décider',
+  APPROVED: 'Validée',
+  REJECTED: 'Refusée',
+};
+
+export const probabilityLabel = ['', 'Faible', 'Possible', 'Probable', 'Quasi certaine'];
+export const impactLabel = ['', 'Mineur', 'Modéré', 'Majeur', 'Critique'];

@@ -281,6 +281,9 @@ export interface ProjectSummary {
   budgetDays: number | null;
   consumedDays: number;
   budgetPct: number | null;
+  criticalRisks: number;
+  latestReport: { date: string; trend: Trend; summary: string; authorName: string | null } | null;
+  reportStale: boolean;
 }
 
 export interface Portfolio {
@@ -292,6 +295,7 @@ export interface Portfolio {
     onHoldProjects: number;
     p1Projects: number;
     overBudgetProjects: number;
+    criticalRisks: number;
     openTasks: number;
     overdueTasks: number;
     completedLast7Days: number;
@@ -377,4 +381,84 @@ export interface WeekLoad {
 export interface Capacity {
   weeks: string[];
   people: { userId: number; displayName: string; jobTitle: string | null; daysPerWeek: number; weeks: WeekLoad[]; allocations: Allocation[] }[];
+}
+
+// ---------- Pilotage : risques, décisions, météo, COPIL, roadmap ----------
+export type Trend = 'UP' | 'STABLE' | 'DOWN';
+export type RiskStatus = 'OPEN' | 'MITIGATING' | 'OCCURRED' | 'CLOSED';
+export type DecisionStatus = 'PROPOSED' | 'APPROVED' | 'REJECTED';
+
+export interface Risk {
+  id: number;
+  title: string;
+  description: string | null;
+  probability: number;
+  impact: number;
+  score: number;
+  critical: boolean;
+  status: RiskStatus;
+  ownerId: number | null;
+  ownerName: string | null;
+  mitigation: string | null;
+  dueDate: string | null;
+  updatedAt: string;
+}
+
+export interface RiskInput {
+  title: string;
+  description?: string | null;
+  probability: number;
+  impact: number;
+  status?: RiskStatus;
+  ownerId?: number | null;
+  mitigation?: string | null;
+  dueDate?: string | null;
+}
+
+export interface Decision {
+  id: number;
+  title: string;
+  description: string | null;
+  decidedOn: string | null;
+  decidedBy: string | null;
+  status: DecisionStatus;
+  createdAt: string;
+}
+
+export interface StatusReport {
+  id: number;
+  reportDate: string;
+  health: Health;
+  trend: Trend;
+  summary: string;
+  achievements: string | null;
+  nextSteps: string | null;
+  attentionPoints: string | null;
+  authorName: string | null;
+}
+
+export interface Copil {
+  project: Project;
+  latestReport: StatusReport | null;
+  history: StatusReport[];
+  tasks: { total: number; done: number; overdue: number; progress: number } | null;
+  plan: RetroPlan | null;
+  risks: Risk[] | null;
+  decisions: Decision[] | null;
+  budget: TimeSummary | null;
+  generatedOn: string;
+}
+
+export interface RoadmapProject {
+  id: number;
+  code: string;
+  name: string;
+  color: string;
+  teamName: string | null;
+  status: ProjectStatus;
+  priority: ProjectPriority;
+  health: Health;
+  startDate: string | null;
+  endDate: string | null;
+  phases: RetroPhase[];
 }

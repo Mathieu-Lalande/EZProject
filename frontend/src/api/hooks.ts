@@ -1,6 +1,15 @@
 import { useMutation, useQuery, useQueryClient, type QueryKey } from '@tanstack/react-query';
 import { api, request } from './client';
 import type {
+  Copil,
+  Decision,
+  DecisionStatus,
+  Risk,
+  RiskInput,
+  RoadmapProject,
+  StatusReport,
+  Trend,
+  Health,
   Absence,
   AbsenceKind,
   Allocation,
@@ -561,3 +570,51 @@ export function useChangeHolidayCalendar() {
     onSuccess: () => invalidate(keys.organization, ['projects'], ['capacity'], ['timesheet']),
   });
 }
+
+// ---------- Risques & décisions ----------
+export const useRisks = (projectId: number) =>
+  useQuery({ queryKey: ['projects', projectId, 'risks'], queryFn: () => api.get<Risk[]>(`/api/projects/${projectId}/risks`) });
+
+export const useDecisions = (projectId: number) =>
+  useQuery({ queryKey: ['projects', projectId, 'decisions'], queryFn: () => api.get<Decision[]>(`/api/projects/${projectId}/decisions`) });
+
+export function useRiskMutations(projectId: number) {
+  const invalidate = useInvalidate();
+  const onSuccess = () => invalidate(['projects', projectId, 'risks'], ['projects', projectId, 'decisions'], keys.portfolio);
+  return {
+    saveRisk: useMutation({
+      mutationFn: ({ id, input }: { id?: number; input: RiskInput }) =>
+        id ? api.put<Risk>(`/api/risks/${id}`, input) : api.post<Risk>(`/api/projects/${projectId}/risks`, input),
+      onSuccess,
+    }),
+    removeRisk: useMutation({ mutationFn: (id: number) => api.delete(`/api/risks/${id}`), onSuccess }),
+    saveDecision: useMutation({
+      mutationFn: ({ id, input }: { id?: number; input: { title: string; description?: string | null; decidedOn?: string | null; decidedBy?: string | null; status?: DecisionStatus } }) =>
+        id ? api.put<Decision>(`/api/decisions/${id}`, input) : api.post<Decision>(`/api/projects/${projectId}/decisions`, input),
+      onSuccess,
+    }),
+    removeDecision: useMutation({ mutationFn: (id: number) => api.delete(`/api/decisions/${id}`), onSuccess }),
+  };
+}
+
+// ---------- Météo & COPIL ----------
+export const useReports = (projectId: number) =>
+  useQuery({ queryKey: ['projects', projectId, 'reports'], queryFn: () => api.get<StatusReport[]>(`/api/projects/${projectId}/reports`) });
+
+export function usePublishReport(projectId: number) {
+  const invalidate = useInvalidate();
+  return useMutation({
+    mutationFn: (input: { health: Health; trend: Trend; summary: string; achievements?: string; nextSteps?: string; attentionPoints?: string }) =>
+      api.post<StatusReport>(`/api/projects/${projectId}/reports`, input),
+    onSuccess: () => invalidate(['projects', projectId, 'reports'], keys.projects, keys.portfolio),
+  });
+}
+
+export const useCopil = (projectId: number) =>
+  useQuery({ queryKey: ['projects', projectId, 'copil'], queryFn: () => api.get<Copil>(`/api/projects/${projectId}/copil`) });
+
+export const useRoadmap = (teamId?: number) =>
+  useQuery({
+    queryKey: ['roadmap', teamId ?? 'all'],
+    queryFn: () => api.get<RoadmapProject[]>(teamId ? `/api/portfolio/roadmap?teamId=${teamId}` : '/api/portfolio/roadmap'),
+  });

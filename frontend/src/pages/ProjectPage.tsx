@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import { Navigate, NavLink, useParams } from 'react-router-dom';
-import { CalendarClock, KanbanSquare, LayoutDashboard, ListChecks, PauseCircle, Pencil, Settings, ShieldCheck, Spade, Timer, Trash2, Users } from 'lucide-react';
+import { CalendarClock, KanbanSquare, LayoutDashboard, ListChecks, PauseCircle, Pencil, Settings, ShieldCheck, Spade, Timer, Trash2, Users, ShieldAlert } from 'lucide-react';
 import { TimeTab } from '../features/time/TimeTab';
+import { RisksTab } from '../features/risk/RisksTab';
 import clsx from 'clsx';
 import { useDeleteProject, useProject } from '../api/hooks';
 import type { ModuleType, Permission } from '../api/types';
@@ -38,6 +39,7 @@ const TABS: Tab[] = [
   { id: 'retro', label: 'Rétro-planning', icon: <CalendarClock className="size-4" />, module: 'RETRO_PLANNING', view: 'RETRO_VIEW' },
   { id: 'poker', label: 'Planning poker', icon: <Spade className="size-4" />, module: 'POKER', view: 'POKER_VIEW' },
   { id: 'time', label: 'Temps & budget', icon: <Timer className="size-4" />, module: 'TIME_TRACKING', view: 'TIME_VIEW' },
+  { id: 'risks', label: 'Risques', icon: <ShieldAlert className="size-4" />, module: 'RISKS', view: 'RISK_VIEW' },
   { id: 'access', label: 'Accès', icon: <ShieldCheck className="size-4" /> },
   { id: 'settings', label: 'Modules', icon: <Settings className="size-4" /> },
 ];
@@ -120,6 +122,7 @@ export function ProjectPage() {
       {tab === 'retro' && <RetroPlanning project={project} />}
       {tab === 'poker' && <PokerRoom project={project} />}
       {tab === 'time' && <TimeTab project={project} />}
+      {tab === 'risks' && <RisksTab project={project} />}
       {tab === 'access' && <ProjectAccess project={project} />}
       {tab === 'settings' && (
         <div className="max-w-3xl">

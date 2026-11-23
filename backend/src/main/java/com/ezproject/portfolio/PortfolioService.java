@@ -28,6 +28,9 @@ import com.ezproject.retroplanning.RetroPlanDto;
 import com.ezproject.retroplanning.RetroPlanningService;
 import com.ezproject.task.TaskRepository;
 import com.ezproject.time.TimeService;
+import com.ezproject.report.ReportService;
+import com.ezproject.report.StatusReport;
+import com.ezproject.risk.RiskService;
 import com.ezproject.task.TaskStatus;
 import com.ezproject.team.Team;
 import com.ezproject.team.TeamRepository;
@@ -47,12 +50,20 @@ public class PortfolioService {
     private final ProjectAccessService access;
     private final Clock clock;
     private final TimeService timeService;
+    private final RiskService riskService;
+    private final ReportService reportService;
+
+    /** Au-delà, la météo est considérée comme non mise à jour. */
+    static final int REPORT_STALE_DAYS = 14;
 
     public PortfolioService(ProjectRepository projectRepository, TaskRepository taskRepository,
                             RetroPhaseRepository phaseRepository, RetroPlanningService retroPlanningService,
                             AppUserRepository userRepository, TeamRepository teamRepository,
-                            ProjectAccessService access, Clock clock, TimeService timeService) {
+                            ProjectAccessService access, Clock clock, TimeService timeService,
+                            RiskService riskService, ReportService reportService) {
         this.timeService = timeService;
+        this.riskService = riskService;
+        this.reportService = reportService;
         this.projectRepository = projectRepository;
         this.taskRepository = taskRepository;
         this.phaseRepository = phaseRepository;
@@ -91,7 +102,8 @@ public class PortfolioService {
                 openTasks,
                 open.stream().mapToLong(PortfolioDto.ProjectSummary::overdueTasks).sum(),
                 ids.isEmpty() ? 0 : taskRepository.countCompletedSince(ids, clock.instant().minus(Duration.ofDays(7))),
-                (int) open.stream().filter(s -> s.budgetPct() != null && s.budgetPct() > 100).count());
+                (int) open.stream().filter(s -> s.budgetPct() != null && s.budgetPct() > 100).count(),
+                open.stream().mapToLong(PortfolioDto.ProjectSummary::criticalRisks).sum());
 
         return new PortfolioDto(
                 me.getRole().seesWholePortfolio() ? PortfolioDto.Scope.ORGANIZATION : PortfolioDto.Scope.MY_PROJECTS,
@@ -115,10 +127,13 @@ public class PortfolioService {
         Map<Long, List<RetroPhase>> phases = phaseRepository.findByProjectIdInOrderBySortOrderAsc(ids).stream()
                 .collect(Collectors.groupingBy(p -> p.getProject().getId()));
         Map<Long, java.math.BigDecimal> consumed = timeService.consumedByProject(ids);
+        Map<Long, Long> critical = riskService.criticalByProject(ids);
+        Map<Long, StatusReport> reports = reportService.latestByProject(ids);
         return projects.stream()
                 .map(p -> summarize(p, statusCounts.getOrDefault(p.getId(), Map.of()),
                         overdue.getOrDefault(p.getId(), 0L), phases.getOrDefault(p.getId(), List.of()), today,
-                        consumed.getOrDefault(p.getId(), java.math.BigDecimal.ZERO)))
+                        consumed.getOrDefault(p.getId(), java.math.BigDecimal.ZERO),
+                        critical.getOrDefault(p.getId(), 0L), reports.get(p.getId())))
                 .sorted(Comparator.comparing(PortfolioDto.ProjectSummary::priority)
                         .thenComparing(s -> s.endDate() == null ? LocalDate.MAX : s.endDate()))
                 .toList();
@@ -126,7 +141,8 @@ public class PortfolioService {
 
     private PortfolioDto.ProjectSummary summarize(Project p, Map<TaskStatus, Long> byStatus, long overdueTasks,
                                                   List<RetroPhase> phases, LocalDate today,
-                                                  java.math.BigDecimal consumedDays) {
+                                                  java.math.BigDecimal consumedDays, long criticalRisks,
+                                                  StatusReport report) {
         long total = byStatus.values().stream().mapToLong(Long::longValue).sum();
         long done = byStatus.getOrDefault(TaskStatus.DONE, 0L);
         int progress = total == 0 ? 0 : (int) Math.round(done * 100.0 / total);
@@ -149,7 +165,11 @@ public class PortfolioService {
         // Un projet en pause n'est pas "à risque" du seul fait de ses retards : il est arbitré
         boolean atRisk = p.getStatus().isOpen() && p.getStatus() != ProjectStatus.ON_HOLD
                 && (p.getHealth() != Health.GREEN || latePhases > 0 || overdueTasks > 0 || plan.startConflict()
-                || budgetDrift || (daysRemaining != null && daysRemaining < 0 && progress < 100));
+                || budgetDrift || criticalRisks > 0 || (daysRemaining != null && daysRemaining < 0 && progress < 100));
+        PortfolioDto.LatestReport latest = report == null ? null : new PortfolioDto.LatestReport(report.getReportDate(),
+                report.getTrend(), report.getSummary(), report.getAuthor() == null ? null : report.getAuthor().getDisplayName());
+        boolean stale = p.getStatus() == ProjectStatus.ACTIVE
+                && (report == null || report.getReportDate().isBefore(today.minusDays(REPORT_STALE_DAYS)));
 
         Map<TaskStatus, Long> counts = new EnumMap<>(TaskStatus.class);
         for (TaskStatus s : TaskStatus.values()) {
@@ -161,7 +181,8 @@ public class PortfolioService {
                 p.getStatus(), p.getStatusReason(), p.getPriority(), p.getHealth(), p.getColor(),
                 owner == null ? null : owner.getDisplayName(), team == null ? null : team.getId(),
                 team == null ? null : team.getName(), p.getStartDate(), p.getEndDate(), daysRemaining, progress,
-                total, counts, overdueTasks, next, latePhases, atRisk, p.getBudgetDays(), consumedDays, budgetPct);
+                total, counts, overdueTasks, next, latePhases, atRisk, p.getBudgetDays(), consumedDays, budgetPct,
+                criticalRisks, latest, stale);
     }
 
     private List<PortfolioDto.Workload> workload(AppUser me, List<Long> projectIds) {

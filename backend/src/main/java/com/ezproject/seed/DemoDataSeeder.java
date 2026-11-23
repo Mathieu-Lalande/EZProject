@@ -27,6 +27,15 @@ import com.ezproject.capacity.Allocation;
 import com.ezproject.capacity.AllocationRepository;
 import com.ezproject.time.TimeEntry;
 import com.ezproject.time.TimeEntryRepository;
+import com.ezproject.report.StatusReport;
+import com.ezproject.report.StatusReportRepository;
+import com.ezproject.report.Trend;
+import com.ezproject.risk.Decision;
+import com.ezproject.risk.DecisionRepository;
+import com.ezproject.risk.DecisionStatus;
+import com.ezproject.risk.Risk;
+import com.ezproject.risk.RiskRepository;
+import com.ezproject.risk.RiskStatus;
 import com.ezproject.access.ProjectMemberRepository;
 import com.ezproject.access.ProjectRole;
 import com.ezproject.access.Visibility;
@@ -89,6 +98,17 @@ class DemoDataSeeder implements ApplicationRunner {
     private TimeEntryRepository timeEntries;
     private AllocationRepository allocations;
     private AbsenceRepository absences;
+
+    private RiskRepository risks;
+    private DecisionRepository decisions;
+    private StatusReportRepository reports;
+
+    @org.springframework.beans.factory.annotation.Autowired
+    void setSteeringRepositories(RiskRepository risks, DecisionRepository decisions, StatusReportRepository reports) {
+        this.risks = risks;
+        this.decisions = decisions;
+        this.reports = reports;
+    }
 
     @org.springframework.beans.factory.annotation.Autowired
     void setCapacityRepositories(TimeEntryRepository timeEntries, AllocationRepository allocations,
@@ -245,6 +265,31 @@ class DemoDataSeeder implements ApplicationRunner {
         allocate(manda, camille, today.minusWeeks(1), today.plusWeeks(4), "1");
         nina.changeCapacity(new BigDecimal("4"));
 
+        risk(mobile, "Synchronisation hors-ligne instable sur les vieux terminaux", 4, 4, RiskStatus.OPEN, hugo,
+                "Banc de test sur 5 modèles, plan B : mode connecté dégradé", today.plusDays(7));
+        risk(mobile, "Retard de validation des stores", 2, 3, RiskStatus.OPEN, sarah, "Soumission anticipée d'une bêta", null);
+        risk(portail, "Délai d'homologation du prestataire de paiement", 2, 3, RiskStatus.MITIGATING, hugo,
+                "Environnement bac à sable obtenu, relance hebdomadaire", today.plusDays(10));
+        risk(audit, "Faible disponibilité des métiers pour les entretiens", 3, 3, RiskStatus.OPEN, thomas,
+                "Créneaux réservés via la DSI, ateliers groupés", today.plusDays(5));
+        risk(audit, "Périmètre applicatif sous-estimé", 2, 2, RiskStatus.CLOSED, nina, "Cartographie complétée", null);
+
+        decision(mobile, "Signature électronique reportée en V2", "COPIL", today.minusDays(14), DecisionStatus.APPROVED, lea);
+        decision(portail, "Choix du prestataire de paiement", "Comité client", today.minusDays(30), DecisionStatus.APPROVED, lea);
+        decision(audit, "Élargir le diagnostic aux filiales", "Sponsor client", null, DecisionStatus.PROPOSED, thomas);
+
+        reports.save(new StatusReport(portail, lea, today.minusDays(21), Health.AMBER, Trend.STABLE,
+                "Démarrage du développement, environnement de paiement en attente.", null, null, null));
+        reports.save(new StatusReport(portail, lea, today.minusDays(7), Health.GREEN, Trend.UP,
+                "Authentification livrée, intégration du paiement en cours.", "API OAuth2 en recette",
+                "Finaliser le paiement, tests de charge", null));
+        reports.save(new StatusReport(mobile, hugo, today.minusDays(20), Health.RED, Trend.DOWN,
+                "La synchronisation hors-ligne bloque la recette terrain.", null, "Banc de test terminaux",
+                "Arbitrage staffing nécessaire"));
+        reports.save(new StatusReport(audit, thomas, today.minusDays(3), Health.AMBER, Trend.STABLE,
+                "Entretiens terminés, cartographie en cours ; consommation du budget à surveiller.",
+                "12 entretiens réalisés", "Ateliers de restitution intermédiaire", "Budget consommé plus vite que prévu"));
+
         absences.save(new Absence(sarah, today.plusWeeks(1).with(java.time.DayOfWeek.MONDAY),
                 today.plusWeeks(1).with(java.time.DayOfWeek.WEDNESDAY), AbsenceKind.VACATION, "Congés"));
         absences.save(new Absence(thomas, today.plusWeeks(2).with(java.time.DayOfWeek.THURSDAY),
@@ -261,6 +306,19 @@ class DemoDataSeeder implements ApplicationRunner {
         task(erp, new EnumMap<>(TaskStatus.class), "Reprise des données articles", TaskStatus.TODO, Priority.HIGH, bob, 8, today.plusDays(12));
 
         log.info("Données de démonstration créées : Horizon Conseil (*@ezproject.local) et Acme Industries (bob@acme.local)");
+    }
+
+    private void risk(Project project, String title, int probability, int impact, RiskStatus status, AppUser owner,
+                      String mitigation, LocalDate due) {
+        Risk r = new Risk(project);
+        r.update(title, null, probability, impact, status, owner, mitigation, due);
+        risks.save(r);
+    }
+
+    private void decision(Project project, String title, String by, LocalDate on, DecisionStatus status, AppUser author) {
+        Decision d = new Decision(project, author);
+        d.update(title, null, on, by, status);
+        decisions.save(d);
     }
 
     private void logTime(Project project, AppUser user, LocalDate until, int workingDays, String days) {

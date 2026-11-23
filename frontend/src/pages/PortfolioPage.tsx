@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { Activity, AlertTriangle, CheckCheck, Clock, Download, Flame, FolderKanban, LayoutGrid, PauseCircle, Rows3, SlidersHorizontal, Wallet } from 'lucide-react';
+import { Activity, AlertTriangle, CheckCheck, Clock, Download, Flame, FolderKanban, LayoutGrid, PauseCircle, Rows3, SlidersHorizontal, Wallet, ShieldAlert } from 'lucide-react';
 import clsx from 'clsx';
 import { usePortfolio } from '../api/hooks';
 import type { ProjectStatus, ProjectType } from '../api/types';
@@ -81,10 +81,11 @@ export function PortfolioPage() {
       />
 
       {has('kpis') && (
-        <div className="mb-6 grid grid-cols-2 gap-4 md:grid-cols-4 2xl:grid-cols-8">
+        <div className="mb-6 grid grid-cols-2 gap-4 md:grid-cols-3 xl:grid-cols-5 2xl:grid-cols-9">
           <KpiCard label="Projets ouverts" value={data.kpis.openProjects} icon={<FolderKanban className="size-4" />} />
           <KpiCard label="Priorité P1" value={data.kpis.p1Projects} icon={<Flame className="size-4" />} tone="red" />
           <KpiCard label="En pause" value={data.kpis.onHoldProjects} icon={<PauseCircle className="size-4" />} tone="amber" />
+          <KpiCard label="Risques critiques" value={data.kpis.criticalRisks} icon={<ShieldAlert className="size-4" />} tone={data.kpis.criticalRisks ? 'red' : 'green'} />
           <KpiCard label="Budget dépassé" value={data.kpis.overBudgetProjects} icon={<Wallet className="size-4" />} tone={data.kpis.overBudgetProjects ? 'red' : 'green'} />
           <KpiCard label="Projets à risque" value={data.kpis.atRiskProjects} icon={<AlertTriangle className="size-4" />} tone={data.kpis.atRiskProjects ? 'amber' : 'green'} />
           <KpiCard label="Tâches ouvertes" value={data.kpis.openTasks} icon={<Activity className="size-4" />} />
