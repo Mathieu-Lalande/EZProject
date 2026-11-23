@@ -1,0 +1,16 @@
+# Base PostgreSQL pour le profil "prod" en local.
+# Les identifiants sont lus depuis l'environnement (fichier .env non versionné), jamais en dur.
+services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: ezproject
+      POSTGRES_USER: ${DB_USERNAME:?DB_USERNAME requis}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD requis}
+    ports:
+      - "5432:5432"
+    volumes:
+      - ezproject-data:/var/lib/postgresql/data
+
+volumes:
+  ezproject-data:
