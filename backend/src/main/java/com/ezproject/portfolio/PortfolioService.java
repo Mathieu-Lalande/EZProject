@@ -4,6 +4,7 @@ import java.time.Clock;
 import java.time.Duration;
 import java.time.LocalDate;
 import java.time.temporal.ChronoUnit;
+import java.util.Comparator;
 import java.util.EnumMap;
 import java.util.HashMap;
 import java.util.List;
@@ -13,9 +14,12 @@ import java.util.stream.Collectors;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.ezproject.access.AccessContext;
+import com.ezproject.access.ProjectAccessService;
 import com.ezproject.project.Health;
 import com.ezproject.project.Project;
 import com.ezproject.project.ProjectRepository;
+import com.ezproject.project.ProjectStatus;
 import com.ezproject.retroplanning.PhaseKind;
 import com.ezproject.retroplanning.PhaseState;
 import com.ezproject.retroplanning.RetroPhase;
@@ -24,6 +28,8 @@ import com.ezproject.retroplanning.RetroPlanDto;
 import com.ezproject.retroplanning.RetroPlanningService;
 import com.ezproject.task.TaskRepository;
 import com.ezproject.task.TaskStatus;
+import com.ezproject.team.Team;
+import com.ezproject.team.TeamRepository;
 import com.ezproject.user.AppUser;
 import com.ezproject.user.AppUserRepository;
 
@@ -36,39 +42,40 @@ public class PortfolioService {
     private final RetroPhaseRepository phaseRepository;
     private final RetroPlanningService retroPlanningService;
     private final AppUserRepository userRepository;
+    private final TeamRepository teamRepository;
+    private final ProjectAccessService access;
     private final Clock clock;
 
     public PortfolioService(ProjectRepository projectRepository, TaskRepository taskRepository,
                             RetroPhaseRepository phaseRepository, RetroPlanningService retroPlanningService,
-                            AppUserRepository userRepository, Clock clock) {
+                            AppUserRepository userRepository, TeamRepository teamRepository,
+                            ProjectAccessService access, Clock clock) {
         this.projectRepository = projectRepository;
         this.taskRepository = taskRepository;
         this.phaseRepository = phaseRepository;
         this.retroPlanningService = retroPlanningService;
         this.userRepository = userRepository;
+        this.teamRepository = teamRepository;
+        this.access = access;
         this.clock = clock;
     }
 
-    public PortfolioDto overview() {
-        LocalDate today = LocalDate.now(clock);
-        List<Project> projects = projectRepository.findAllByOrderByNameAsc();
-
-        Map<Long, Map<TaskStatus, Long>> statusCounts = new HashMap<>();
-        for (TaskRepository.StatusCount c : taskRepository.countByProjectAndStatus()) {
-            statusCounts.computeIfAbsent(c.getProjectId(), k -> new EnumMap<>(TaskStatus.class))
-                    .put(c.getStatus(), c.getTotal());
-        }
-        Map<Long, Long> overdue = taskRepository.countOverdueByProject(today).stream()
-                .collect(Collectors.toMap(TaskRepository.ProjectCount::getProjectId,
-                        TaskRepository.ProjectCount::getTotal));
-        Map<Long, List<RetroPhase>> phases = phaseRepository
-                .findByProjectIdInOrderBySortOrderAsc(projects.stream().map(Project::getId).toList()).stream()
-                .collect(Collectors.groupingBy(p -> p.getProject().getId()));
-
-        List<PortfolioDto.ProjectSummary> summaries = projects.stream()
-                .map(p -> summarize(p, statusCounts.getOrDefault(p.getId(), Map.of()),
-                        overdue.getOrDefault(p.getId(), 0L), phases.getOrDefault(p.getId(), List.of()), today))
+    /** Projets du portefeuille visibles par l'utilisateur courant, éventuellement filtrés par équipe. */
+    public List<Project> visibleProjects(Long teamId) {
+        AccessContext ctx = access.context();
+        return projectRepository.findByOrganizationIdOrderByNameAsc(ctx.user().getOrganization().getId()).stream()
+                .filter(ctx::canSee)
+                .filter(p -> teamId == null || (p.getTeam() != null && p.getTeam().getId().equals(teamId)))
                 .toList();
+    }
+
+    public PortfolioDto overview(Long teamId) {
+        AccessContext ctx = access.context();
+        AppUser me = ctx.user();
+        LocalDate today = LocalDate.now(clock);
+        List<Project> projects = visibleProjects(teamId);
+        List<Long> ids = projects.stream().map(Project::getId).toList();
+        List<PortfolioDto.ProjectSummary> summaries = summarize(projects, today);
 
         List<PortfolioDto.ProjectSummary> open = summaries.stream().filter(s -> s.status().isOpen()).toList();
         long openTasks = open.stream()
@@ -76,11 +83,39 @@ public class PortfolioService {
         PortfolioDto.Kpis kpis = new PortfolioDto.Kpis(
                 open.size(),
                 (int) open.stream().filter(PortfolioDto.ProjectSummary::atRisk).count(),
+                (int) open.stream().filter(s -> s.status() == ProjectStatus.ON_HOLD).count(),
+                (int) open.stream().filter(s -> s.priority() == com.ezproject.project.ProjectPriority.P1).count(),
                 openTasks,
                 open.stream().mapToLong(PortfolioDto.ProjectSummary::overdueTasks).sum(),
-                taskRepository.countCompletedSince(clock.instant().minus(Duration.ofDays(7))));
+                ids.isEmpty() ? 0 : taskRepository.countCompletedSince(ids, clock.instant().minus(Duration.ofDays(7))));
 
-        return new PortfolioDto(kpis, summaries, workload());
+        return new PortfolioDto(
+                me.getRole().seesWholePortfolio() ? PortfolioDto.Scope.ORGANIZATION : PortfolioDto.Scope.MY_PROJECTS,
+                kpis, summaries, workload(me, ids), teams(me, summaries));
+    }
+
+    /** Synthèse par projet, triée par priorité puis échéance (ordre d'arbitrage). */
+    public List<PortfolioDto.ProjectSummary> summarize(List<Project> projects, LocalDate today) {
+        List<Long> ids = projects.stream().map(Project::getId).toList();
+        if (ids.isEmpty()) {
+            return List.of();
+        }
+        Map<Long, Map<TaskStatus, Long>> statusCounts = new HashMap<>();
+        for (TaskRepository.StatusCount c : taskRepository.countByProjectAndStatus(ids)) {
+            statusCounts.computeIfAbsent(c.getProjectId(), k -> new EnumMap<>(TaskStatus.class))
+                    .put(c.getStatus(), c.getTotal());
+        }
+        Map<Long, Long> overdue = taskRepository.countOverdueByProject(ids, today).stream()
+                .collect(Collectors.toMap(TaskRepository.ProjectCount::getProjectId,
+                        TaskRepository.ProjectCount::getTotal));
+        Map<Long, List<RetroPhase>> phases = phaseRepository.findByProjectIdInOrderBySortOrderAsc(ids).stream()
+                .collect(Collectors.groupingBy(p -> p.getProject().getId()));
+        return projects.stream()
+                .map(p -> summarize(p, statusCounts.getOrDefault(p.getId(), Map.of()),
+                        overdue.getOrDefault(p.getId(), 0L), phases.getOrDefault(p.getId(), List.of()), today))
+                .sorted(Comparator.comparing(PortfolioDto.ProjectSummary::priority)
+                        .thenComparing(s -> s.endDate() == null ? LocalDate.MAX : s.endDate()))
+                .toList();
     }
 
     private PortfolioDto.ProjectSummary summarize(Project p, Map<TaskStatus, Long> byStatus, long overdueTasks,
@@ -99,8 +134,9 @@ public class PortfolioService {
         long latePhases = plan.phases().stream().filter(ph -> ph.state() == PhaseState.LATE).count();
         Long daysRemaining = p.getEndDate() == null ? null : ChronoUnit.DAYS.between(today, p.getEndDate());
 
-        boolean atRisk = p.getStatus().isOpen() && (p.getHealth() != Health.GREEN || latePhases > 0
-                || overdueTasks > 0 || plan.startConflict()
+        // Un projet en pause n'est pas "à risque" du seul fait de ses retards : il est arbitré
+        boolean atRisk = p.getStatus().isOpen() && p.getStatus() != ProjectStatus.ON_HOLD
+                && (p.getHealth() != Health.GREEN || latePhases > 0 || overdueTasks > 0 || plan.startConflict()
                 || (daysRemaining != null && daysRemaining < 0 && progress < 100));
 
         Map<TaskStatus, Long> counts = new EnumMap<>(TaskStatus.class);
@@ -108,22 +144,40 @@ public class PortfolioService {
             counts.put(s, byStatus.getOrDefault(s, 0L));
         }
         AppUser owner = p.getOwner();
+        Team team = p.getTeam();
         return new PortfolioDto.ProjectSummary(p.getId(), p.getCode(), p.getName(), p.getClient(), p.getType(),
-                p.getStatus(), p.getHealth(), p.getColor(), owner == null ? null : owner.getDisplayName(),
-                p.getStartDate(), p.getEndDate(), daysRemaining, progress, total, counts, overdueTasks, next,
-                latePhases, atRisk);
+                p.getStatus(), p.getStatusReason(), p.getPriority(), p.getHealth(), p.getColor(),
+                owner == null ? null : owner.getDisplayName(), team == null ? null : team.getId(),
+                team == null ? null : team.getName(), p.getStartDate(), p.getEndDate(), daysRemaining, progress,
+                total, counts, overdueTasks, next, latePhases, atRisk);
     }
 
-    private List<PortfolioDto.Workload> workload() {
-        Map<Long, TaskRepository.Workload> byUser = taskRepository.workloadByAssignee().stream()
+    private List<PortfolioDto.Workload> workload(AppUser me, List<Long> projectIds) {
+        if (projectIds.isEmpty()) {
+            return List.of();
+        }
+        Map<Long, TaskRepository.Workload> byUser = taskRepository.workloadByAssignee(projectIds).stream()
                 .collect(Collectors.toMap(TaskRepository.Workload::getUserId, w -> w));
-        return userRepository.findAllByOrderByDisplayNameAsc().stream()
+        return userRepository.findByOrganizationIdOrderByDisplayNameAsc(me.getOrganization().getId()).stream()
+                .filter(u -> me.getRole().seesWholePortfolio() || byUser.containsKey(u.getId()))
                 .map(u -> {
                     TaskRepository.Workload w = byUser.get(u.getId());
                     return new PortfolioDto.Workload(u.getId(), u.getDisplayName(), u.getJobTitle(),
                             w == null ? 0 : w.getOpenTasks(), w == null ? 0 : w.getOpenPoints());
                 })
                 .sorted((a, b) -> Long.compare(b.openTasks(), a.openTasks()))
+                .toList();
+    }
+
+    private List<PortfolioDto.TeamSummary> teams(AppUser me, List<PortfolioDto.ProjectSummary> summaries) {
+        return teamRepository.findByOrganizationIdOrderByNameAsc(me.getOrganization().getId()).stream()
+                .map(t -> {
+                    var mine = summaries.stream()
+                            .filter(s -> t.getId().equals(s.teamId()) && s.status().isOpen()).toList();
+                    return new PortfolioDto.TeamSummary(t.getId(), t.getName(), t.getColor(), mine.size(),
+                            (int) mine.stream().filter(PortfolioDto.ProjectSummary::atRisk).count());
+                })
+                .filter(t -> me.getRole().seesWholePortfolio() || t.openProjects() > 0)
                 .toList();
     }
 }

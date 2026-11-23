@@ -11,9 +11,10 @@ import org.springframework.util.StringUtils;
 
 import com.ezproject.common.BusinessRuleException;
 import com.ezproject.common.NotFoundException;
+import com.ezproject.access.Permission;
+import com.ezproject.access.ProjectAccessService;
 import com.ezproject.project.ModuleType;
 import com.ezproject.project.Project;
-import com.ezproject.project.ProjectService;
 import com.ezproject.security.CurrentUser;
 import com.ezproject.task.Task;
 import com.ezproject.task.TaskService;
@@ -24,35 +25,35 @@ import com.ezproject.user.AppUser;
 public class PokerService {
 
     private final PokerRoundRepository repository;
-    private final ProjectService projectService;
+    private final ProjectAccessService access;
     private final TaskService taskService;
     private final CurrentUser currentUser;
 
-    public PokerService(PokerRoundRepository repository, ProjectService projectService, TaskService taskService,
+    public PokerService(PokerRoundRepository repository, ProjectAccessService access, TaskService taskService,
                         CurrentUser currentUser) {
         this.repository = repository;
-        this.projectService = projectService;
+        this.access = access;
         this.taskService = taskService;
         this.currentUser = currentUser;
     }
 
     public List<RoundDto> findByProject(Long projectId) {
-        projectService.getEntity(projectId);
+        access.require(projectId, Permission.POKER_VIEW);
         AppUser me = currentUser.get();
         return repository.findByProjectIdOrderByCreatedAtDesc(projectId).stream().map(r -> toDto(r, me)).toList();
     }
 
     public RoundDto get(Long roundId) {
-        return toDto(getEntity(roundId), currentUser.get());
+        return toDto(getWith(roundId, Permission.POKER_VIEW), currentUser.get());
     }
 
     @Transactional
     public RoundDto start(Long projectId, NewRoundRequest request) {
-        Project project = projectService.requireModule(projectId, ModuleType.POKER);
+        Project project = access.require(projectId, Permission.POKER_FACILITATE, ModuleType.POKER);
         Task task = null;
         String title = request.storyTitle();
         if (request.taskId() != null) {
-            task = taskService.getEntity(request.taskId());
+            task = taskService.getVisible(request.taskId());
             if (!task.getProject().getId().equals(projectId)) {
                 throw new BusinessRuleException("La tâche n'appartient pas à ce projet");
             }
@@ -66,7 +67,7 @@ public class PokerService {
 
     @Transactional
     public RoundDto vote(Long roundId, VoteRequest request) {
-        PokerRound round = getEntity(roundId);
+        PokerRound round = getWith(roundId, Permission.POKER_VOTE);
         AppUser me = currentUser.get();
         round.vote(me, request.card());
         return toDto(round, me);
@@ -74,14 +75,14 @@ public class PokerService {
 
     @Transactional
     public RoundDto reveal(Long roundId) {
-        PokerRound round = getEntity(roundId);
+        PokerRound round = getWith(roundId, Permission.POKER_FACILITATE);
         round.reveal();
         return toDto(round, currentUser.get());
     }
 
     @Transactional
     public RoundDto restart(Long roundId) {
-        PokerRound round = getEntity(roundId);
+        PokerRound round = getWith(roundId, Permission.POKER_FACILITATE);
         round.restart();
         repository.flush();
         return toDto(round, currentUser.get());
@@ -90,7 +91,7 @@ public class PokerService {
     /** Clôt le tour et reporte l'estimation sur la tâche liée, le cas échéant. */
     @Transactional
     public RoundDto close(Long roundId, VoteRequest request) {
-        PokerRound round = getEntity(roundId);
+        PokerRound round = getWith(roundId, Permission.POKER_FACILITATE);
         round.close(request.card());
         OptionalInt points = PokerDeck.numericValue(request.card());
         if (round.getTask() != null && points.isPresent()) {
@@ -99,8 +100,10 @@ public class PokerService {
         return toDto(round, currentUser.get());
     }
 
-    private PokerRound getEntity(Long id) {
-        return repository.findById(id).orElseThrow(() -> new NotFoundException("Tour de poker", id));
+    private PokerRound getWith(Long id, Permission permission) {
+        PokerRound round = repository.findById(id).orElseThrow(() -> new NotFoundException("Tour de poker", id));
+        access.require(round.getProject(), permission);
+        return round;
     }
 
     RoundDto toDto(PokerRound round, AppUser me) {

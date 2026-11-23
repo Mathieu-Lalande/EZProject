@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from 'react';
-import { Navigate, useLocation, useNavigate } from 'react-router-dom';
+import { Link, Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { LayoutGrid, KanbanSquare, CalendarClock, Spade } from 'lucide-react';
 import { useLogin, useMe } from '../api/hooks';
 import { Button } from '../components/ui/Button';
@@ -70,10 +70,15 @@ export function LoginPage() {
             {login.isError && <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700 dark:bg-red-500/10 dark:text-red-300">Email ou mot de passe incorrect.</p>}
             <Button type="submit" className="w-full" loading={login.isPending}>Se connecter</Button>
           </div>
+          <p className="mt-6 text-center text-sm text-ink-3">
+            Nouveau sur EZProject ? <Link to="/signup" className="font-medium text-brand-600 hover:underline">Créer une organisation</Link>
+          </p>
           {import.meta.env.DEV && (
             <div className="mt-8 rounded-lg border border-dashed border-line p-3 text-xs text-ink-3">
               <div className="mb-1 font-medium text-ink-2">Comptes de démo (profil dev)</div>
-              camille@ (COO, admin) · lea@ (PMO) · hugo@ · sarah@ · thomas@ — suffixe <code>ezproject.local</code>
+              <b>Horizon Conseil</b> (<code>@ezproject.local</code>) : camille (COO, propriétaire) · lea (PMO, manager) ·
+              hugo (resp. Delivery Web) · sarah · thomas (resp. Conseil SI) · nina · julie (invitée client)
+              <br /><b>Acme Industries</b> : bob@acme.local — mot de passe <code>demo1234</code>
             </div>
           )}
         </form>

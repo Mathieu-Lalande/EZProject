@@ -15,7 +15,8 @@ import {
 import { SortableContext, arrayMove, sortableKeyboardCoordinates, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { Plus, Search } from 'lucide-react';
 import clsx from 'clsx';
-import type { Task, TaskStatus } from '../../api/types';
+import type { Project, Task, TaskStatus } from '../../api/types';
+import { can } from '../../lib/permissions';
 import { useMe, useMoveTask, useSaveTask, useTasks } from '../../api/hooks';
 import { Spinner } from '../../components/ui/Spinner';
 import { Button } from '../../components/ui/Button';
@@ -44,7 +45,10 @@ function findColumn(columns: Columns, id: number | string): TaskStatus | undefin
   return TASK_COLUMNS.find((s) => columns[s].some((t) => t.id === id));
 }
 
-export function KanbanBoard({ projectId }: { projectId: number }) {
+export function KanbanBoard({ project }: { project: Project }) {
+  const projectId = project.id;
+  const canCreate = can(project, 'TASK_CREATE');
+  const canEdit = can(project, 'TASK_EDIT');
   const { data: tasks, isLoading } = useTasks(projectId);
   const { data: me } = useMe();
   const move = useMoveTask(projectId);
@@ -135,9 +139,12 @@ export function KanbanBoard({ projectId }: { projectId: number }) {
         >
           Mes tâches
         </button>
-        <Button className="ml-auto" icon={<Plus className="size-4" />} onClick={() => setEditing({ task: null, status: 'TODO' })}>
-          Nouvelle tâche
-        </Button>
+        {!canEdit && <span className="ml-auto text-xs text-ink-3">Lecture seule</span>}
+        {canCreate && (
+          <Button className="ml-auto" icon={<Plus className="size-4" />} onClick={() => setEditing({ task: null, status: 'TODO' })}>
+            Nouvelle tâche
+          </Button>
+        )}
       </div>
 
       <DndContext sensors={sensors} collisionDetection={closestCorners} onDragStart={onDragStart} onDragOver={onDragOver} onDragEnd={onDragEnd} onDragCancel={() => setActiveTask(null)}>
@@ -147,11 +154,11 @@ export function KanbanBoard({ projectId }: { projectId: number }) {
               <SortableContext items={filtered[status].map((t) => t.id)} strategy={verticalListSortingStrategy}>
                 <div className="flex min-h-16 flex-col gap-2">
                   {filtered[status].map((t) => (
-                    <SortableTaskCard key={t.id} task={t} onOpen={(task) => setEditing({ task, status: task.status })} />
+                    <SortableTaskCard key={t.id} task={t} disabled={!canEdit} onOpen={(task) => setEditing({ task, status: task.status })} />
                   ))}
                 </div>
               </SortableContext>
-              {quickAdd?.status === status ? (
+              {!canCreate ? null : quickAdd?.status === status ? (
                 <input
                   autoFocus
                   className="input mt-2"
@@ -175,7 +182,7 @@ export function KanbanBoard({ projectId }: { projectId: number }) {
         <DragOverlay>{activeTask && <TaskCardView task={activeTask} dragging />}</DragOverlay>
       </DndContext>
 
-      <TaskModal projectId={projectId} open={editing !== null} task={editing?.task ?? null} defaultStatus={editing?.status} onClose={() => setEditing(null)} />
+      <TaskModal projectId={projectId} readOnly={!canEdit} canDelete={can(project, 'TASK_DELETE')} open={editing !== null} task={editing?.task ?? null} defaultStatus={editing?.status} onClose={() => setEditing(null)} />
     </div>
   );
 }

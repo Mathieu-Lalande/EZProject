@@ -12,9 +12,10 @@ import org.springframework.transaction.annotation.Transactional;
 
 import com.ezproject.common.BusinessRuleException;
 import com.ezproject.common.NotFoundException;
+import com.ezproject.access.Permission;
+import com.ezproject.access.ProjectAccessService;
 import com.ezproject.project.ModuleType;
 import com.ezproject.project.Project;
-import com.ezproject.project.ProjectService;
 import com.ezproject.project.ProjectType;
 import com.ezproject.retroplanning.RetroPlanDto.PhaseDto;
 import com.ezproject.retroplanning.RetroPlanningCalculator.PhaseInput;
@@ -25,20 +26,20 @@ import com.ezproject.retroplanning.RetroPlanningCalculator.ScheduledPhase;
 public class RetroPlanningService {
 
     private final RetroPhaseRepository repository;
-    private final ProjectService projectService;
+    private final ProjectAccessService access;
     private final RetroPlanningCalculator calculator;
     private final Clock clock;
 
-    public RetroPlanningService(RetroPhaseRepository repository, ProjectService projectService,
+    public RetroPlanningService(RetroPhaseRepository repository, ProjectAccessService access,
                                 RetroPlanningCalculator calculator, Clock clock) {
         this.repository = repository;
-        this.projectService = projectService;
+        this.access = access;
         this.calculator = calculator;
         this.clock = clock;
     }
 
     public RetroPlanDto getPlan(Long projectId) {
-        Project project = projectService.getEntity(projectId);
+        Project project = access.require(projectId, Permission.RETRO_VIEW);
         return buildPlan(project, repository.findByProjectIdOrderBySortOrderAsc(projectId));
     }
 
@@ -69,7 +70,7 @@ public class RetroPlanningService {
 
     @Transactional
     public RetroPlanDto addPhase(Long projectId, PhaseRequest request) {
-        Project project = projectService.requireModule(projectId, ModuleType.RETRO_PLANNING);
+        Project project = access.require(projectId, Permission.RETRO_EDIT, ModuleType.RETRO_PLANNING);
         int order = repository.findByProjectIdOrderBySortOrderAsc(projectId).size();
         RetroPhase phase = new RetroPhase(project, request.name(), request.kind(), request.durationDays(), order);
         phase.update(request.name(), request.kind(), request.durationDays(), request.done());
@@ -79,14 +80,14 @@ public class RetroPlanningService {
 
     @Transactional
     public RetroPlanDto updatePhase(Long phaseId, PhaseRequest request) {
-        RetroPhase phase = getEntity(phaseId);
+        RetroPhase phase = getEditable(phaseId);
         phase.update(request.name(), request.kind(), request.durationDays(), request.done());
         return getPlan(phase.getProject().getId());
     }
 
     @Transactional
     public RetroPlanDto deletePhase(Long phaseId) {
-        RetroPhase phase = getEntity(phaseId);
+        RetroPhase phase = getEditable(phaseId);
         Long projectId = phase.getProject().getId();
         repository.delete(phase);
         repository.flush();
@@ -99,6 +100,7 @@ public class RetroPlanningService {
 
     @Transactional
     public RetroPlanDto reorder(Long projectId, ReorderRequest request) {
+        access.require(projectId, Permission.RETRO_EDIT);
         List<RetroPhase> phases = repository.findByProjectIdOrderBySortOrderAsc(projectId);
         Map<Long, RetroPhase> byId = phases.stream().collect(Collectors.toMap(RetroPhase::getId, Function.identity()));
         if (request.phaseIds().size() != phases.size() || !byId.keySet().containsAll(request.phaseIds())) {
@@ -113,7 +115,7 @@ public class RetroPlanningService {
     /** Applique un gabarit de phases type (développement ou conseil) sur un rétro-planning vide. */
     @Transactional
     public RetroPlanDto applyTemplate(Long projectId, ProjectType type) {
-        Project project = projectService.requireModule(projectId, ModuleType.RETRO_PLANNING);
+        Project project = access.require(projectId, Permission.RETRO_EDIT, ModuleType.RETRO_PLANNING);
         if (!repository.findByProjectIdOrderBySortOrderAsc(projectId).isEmpty()) {
             throw new BusinessRuleException("Le rétro-planning contient déjà des phases");
         }
@@ -143,8 +145,10 @@ public class RetroPlanningService {
         return getPlan(projectId);
     }
 
-    private RetroPhase getEntity(Long id) {
-        return repository.findById(id).orElseThrow(() -> new NotFoundException("Phase", id));
+    private RetroPhase getEditable(Long id) {
+        RetroPhase phase = repository.findById(id).orElseThrow(() -> new NotFoundException("Phase", id));
+        access.require(phase.getProject(), Permission.RETRO_EDIT);
+        return phase;
     }
 
     private static PhaseState stateOf(ScheduledPhase s, LocalDate today) {

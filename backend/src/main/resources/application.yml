@@ -9,6 +9,11 @@ spring:
       ddl-auto: validate
   flyway:
     enabled: true
+  servlet:
+    multipart:
+      # Import CSV : fichiers de taille raisonnable uniquement
+      max-file-size: 2MB
+      max-request-size: 2MB
 
 server:
   error:

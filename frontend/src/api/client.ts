@@ -20,7 +20,7 @@ function readCookie(name: string): string | null {
 
 const SAFE_METHODS = new Set(['GET', 'HEAD', 'OPTIONS']);
 
-async function request<T>(method: string, url: string, body?: unknown, form?: URLSearchParams): Promise<T> {
+async function request<T>(method: string, url: string, body?: unknown, form?: URLSearchParams | FormData): Promise<T> {
   const headers: Record<string, string> = {};
   if (!SAFE_METHODS.has(method)) {
     const token = readCookie('XSRF-TOKEN');
@@ -62,4 +62,6 @@ export const api = {
   patch: <T>(url: string, body?: unknown) => request<T>('PATCH', url, body),
   delete: <T = void>(url: string) => request<T>('DELETE', url),
   postForm: <T>(url: string, form: URLSearchParams) => request<T>('POST', url, undefined, form),
+  /** Envoi multipart : le navigateur fixe lui-même le Content-Type et la boundary. */
+  upload: <T>(url: string, data: FormData) => request<T>('POST', url, undefined, data),
 };

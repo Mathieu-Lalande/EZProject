@@ -14,6 +14,7 @@ function reasons(p: ProjectSummary): string[] {
 
 export function RisksWidget({ projects }: { projects: ProjectSummary[] }) {
   const atRisk = projects.filter((p) => p.atRisk);
+  const onHold = projects.filter((p) => p.status === 'ON_HOLD');
   return (
     <div className="card p-5">
       <h3 className="text-sm font-semibold">Points d'attention</h3>
@@ -35,6 +36,19 @@ export function RisksWidget({ projects }: { projects: ProjectSummary[] }) {
             </li>
           ))}
         </ul>
+      )}
+      {onHold.length > 0 && (
+        <div className="mt-5 border-t border-line pt-4">
+          <div className="mb-2 text-xs font-semibold text-ink-3">En pause ({onHold.length})</div>
+          <ul className="space-y-2">
+            {onHold.map((p) => (
+              <li key={p.id} className="text-sm">
+                <Link to={`/projects/${p.id}`} className="font-medium hover:text-brand-600">{p.name}</Link>
+                {p.statusReason && <p className="text-xs text-ink-3">« {p.statusReason} »</p>}
+              </li>
+            ))}
+          </ul>
+        </div>
       )}
     </div>
   );

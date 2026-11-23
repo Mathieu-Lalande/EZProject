@@ -4,10 +4,11 @@ import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Component;
 
+import com.ezproject.organization.Organization;
 import com.ezproject.user.AppUser;
 import com.ezproject.user.UserService;
 
-/** Accès à l'utilisateur authentifié, injectable dans les services. */
+/** Accès à l'utilisateur authentifié et à son organisation (le locataire courant). */
 @Component
 public class CurrentUser {
 
@@ -23,5 +24,9 @@ public class CurrentUser {
             throw new IllegalStateException("Aucun utilisateur authentifié");
         }
         return userService.getByEmail(auth.getName());
+    }
+
+    public Organization organization() {
+        return get().getOrganization();
     }
 }

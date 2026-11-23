@@ -1,6 +1,19 @@
 import { useMutation, useQuery, useQueryClient, type QueryKey } from '@tanstack/react-query';
 import { api } from './client';
 import type {
+  ImportReport,
+  Me,
+  Organization,
+  PermissionMatrix,
+  Permission,
+  Plan,
+  ProjectMembers,
+  ProjectPriority,
+  ProjectRole,
+  ProjectStatus,
+  Role,
+  StatusChange,
+  Team,
   ModuleType,
   PhaseInput,
   Portfolio,
@@ -28,6 +41,11 @@ export const keys = {
   retro: (projectId: number) => ['projects', projectId, 'retro'] as const,
   poker: (projectId: number) => ['projects', projectId, 'poker'] as const,
   portfolio: ['portfolio'] as const,
+  organization: ['organization'] as const,
+  teams: ['teams'] as const,
+  permissions: ['permissions'] as const,
+  history: (projectId: number) => ['projects', projectId, 'history'] as const,
+  members: (projectId: number) => ['projects', projectId, 'members'] as const,
 };
 
 /** Invalide plusieurs clés après une mutation (les vues dérivées comme le portefeuille se rafraîchissent). */
@@ -38,7 +56,7 @@ function useInvalidate() {
 
 // ---------- Auth & utilisateurs ----------
 export const useMe = () =>
-  useQuery({ queryKey: keys.me, queryFn: () => api.get<User>('/api/auth/me'), retry: false, staleTime: Infinity });
+  useQuery({ queryKey: keys.me, queryFn: () => api.get<Me>('/api/auth/me'), retry: false, staleTime: Infinity });
 
 export function useLogin() {
   const qc = useQueryClient();
@@ -66,12 +84,96 @@ export function useLogout() {
 
 export const useUsers = () => useQuery({ queryKey: keys.users, queryFn: () => api.get<User[]>('/api/users') });
 
+export function useSignup() {
+  return useMutation({
+    mutationFn: (input: { organizationName: string; displayName: string; email: string; password: string }) =>
+      api.post('/api/auth/signup', input),
+  });
+}
+
 export function useCreateUser() {
   const invalidate = useInvalidate();
   return useMutation({
-    mutationFn: (input: { email: string; displayName: string; password: string; role: string; jobTitle?: string }) =>
+    mutationFn: (input: { email: string; displayName: string; password: string; role: Role; jobTitle?: string }) =>
       api.post<User>('/api/users', input),
-    onSuccess: () => invalidate(keys.users),
+    onSuccess: () => invalidate(keys.users, keys.organization),
+  });
+}
+
+export function useChangeUserRole() {
+  const invalidate = useInvalidate();
+  return useMutation({
+    mutationFn: ({ userId, role }: { userId: number; role: Role }) => api.put<User>(`/api/users/${userId}/role`, { role }),
+    onSuccess: () => invalidate(keys.users, keys.projects, keys.portfolio),
+  });
+}
+
+// ---------- Organisation (SaaS) ----------
+export const useOrganization = () =>
+  useQuery({ queryKey: keys.organization, queryFn: () => api.get<Organization>('/api/organization') });
+
+export function useOrganizationMutations() {
+  const invalidate = useInvalidate();
+  const onSuccess = () => invalidate(keys.organization, keys.me);
+  return {
+    rename: useMutation({ mutationFn: (name: string) => api.put<Organization>('/api/organization', { name }), onSuccess }),
+    changePlan: useMutation({ mutationFn: (plan: Plan) => api.put<Organization>('/api/organization/plan', { plan }), onSuccess }),
+  };
+}
+
+export const usePermissionMatrix = () =>
+  useQuery({ queryKey: keys.permissions, queryFn: () => api.get<PermissionMatrix>('/api/organization/permissions') });
+
+export function usePermissionMatrixMutations() {
+  const qc = useQueryClient();
+  const onSuccess = (m: PermissionMatrix) => {
+    qc.setQueryData(keys.permissions, m);
+    void qc.invalidateQueries({ queryKey: keys.projects });
+  };
+  return {
+    save: useMutation({
+      mutationFn: (roles: Record<ProjectRole, Permission[]>) => api.put<PermissionMatrix>('/api/organization/permissions', { roles }),
+      onSuccess,
+    }),
+    reset: useMutation({ mutationFn: () => api.delete<PermissionMatrix>('/api/organization/permissions'), onSuccess }),
+  };
+}
+
+// ---------- Équipes ----------
+export const useTeams = () => useQuery({ queryKey: keys.teams, queryFn: () => api.get<Team[]>('/api/teams') });
+
+export function useTeamMutations() {
+  const invalidate = useInvalidate();
+  const onSuccess = () => invalidate(keys.teams, keys.me, keys.projects, keys.portfolio);
+  return {
+    save: useMutation({
+      mutationFn: ({ id, input }: { id?: number; input: { name: string; description?: string | null; color?: string } }) =>
+        id ? api.put<Team>(`/api/teams/${id}`, input) : api.post<Team>('/api/teams', input),
+      onSuccess,
+    }),
+    remove: useMutation({ mutationFn: (id: number) => api.delete(`/api/teams/${id}`), onSuccess }),
+    putMember: useMutation({
+      mutationFn: ({ teamId, userId, role }: { teamId: number; userId: number; role: ProjectRole }) =>
+        api.put<Team>(`/api/teams/${teamId}/members/${userId}`, { role }),
+      onSuccess,
+    }),
+    removeMember: useMutation({
+      mutationFn: ({ teamId, userId }: { teamId: number; userId: number }) => api.delete<Team>(`/api/teams/${teamId}/members/${userId}`),
+      onSuccess,
+    }),
+  };
+}
+
+// ---------- Import / export ----------
+export function useImport(kind: 'projects' | 'tasks') {
+  const invalidate = useInvalidate();
+  return useMutation({
+    mutationFn: ({ file, dryRun }: { file: File; dryRun: boolean }) => {
+      const data = new FormData();
+      data.append('file', file);
+      return api.upload<ImportReport>(`/api/import/${kind}?dryRun=${dryRun}`, data);
+    },
+    onSuccess: (report) => (report.applied ? invalidate(keys.projects, keys.portfolio, keys.teams, keys.organization) : undefined),
   });
 }
 
@@ -91,6 +193,43 @@ export function useSaveProject() {
   });
 }
 
+export const useProjectHistory = (projectId: number) =>
+  useQuery({ queryKey: keys.history(projectId), queryFn: () => api.get<StatusChange[]>(`/api/projects/${projectId}/history`) });
+
+export function useProjectStatusMutations(projectId: number) {
+  const invalidate = useInvalidate();
+  const onSuccess = () => invalidate(keys.projects, keys.portfolio, keys.history(projectId));
+  return {
+    status: useMutation({
+      mutationFn: (input: { status: ProjectStatus; reason?: string }) => api.patch<Project>(`/api/projects/${projectId}/status`, input),
+      onSuccess,
+    }),
+    priority: useMutation({
+      mutationFn: (priority: ProjectPriority) => api.patch<Project>(`/api/projects/${projectId}/priority`, { priority }),
+      onSuccess,
+    }),
+  };
+}
+
+export const useProjectMembers = (projectId: number) =>
+  useQuery({ queryKey: keys.members(projectId), queryFn: () => api.get<ProjectMembers>(`/api/projects/${projectId}/members`) });
+
+export function useProjectMemberMutations(projectId: number) {
+  const qc = useQueryClient();
+  const onSuccess = (m: ProjectMembers) => qc.setQueryData(keys.members(projectId), m);
+  return {
+    put: useMutation({
+      mutationFn: ({ userId, role }: { userId: number; role: ProjectRole }) =>
+        api.put<ProjectMembers>(`/api/projects/${projectId}/members/${userId}`, { role }),
+      onSuccess,
+    }),
+    remove: useMutation({
+      mutationFn: (userId: number) => api.delete<ProjectMembers>(`/api/projects/${projectId}/members/${userId}`),
+      onSuccess,
+    }),
+  };
+}
+
 export function useUpdateModules(projectId: number) {
   const invalidate = useInvalidate();
   return useMutation({
@@ -108,8 +247,8 @@ export function useDeleteProject() {
 }
 
 // ---------- Tâches ----------
-export const useTasks = (projectId: number) =>
-  useQuery({ queryKey: keys.tasks(projectId), queryFn: () => api.get<Task[]>(`/api/projects/${projectId}/tasks`) });
+export const useTasks = (projectId: number, enabled = true) =>
+  useQuery({ queryKey: keys.tasks(projectId), queryFn: () => api.get<Task[]>(`/api/projects/${projectId}/tasks`), enabled });
 
 export const useMyTasks = () =>
   useQuery({ queryKey: keys.myTasks, queryFn: () => api.get<Task[]>('/api/tasks/mine') });
@@ -169,8 +308,8 @@ export function useTodoMutations(projectId?: number) {
 }
 
 // ---------- Rétro-planning ----------
-export const useRetroPlan = (projectId: number) =>
-  useQuery({ queryKey: keys.retro(projectId), queryFn: () => api.get<RetroPlan>(`/api/projects/${projectId}/retro-plan`) });
+export const useRetroPlan = (projectId: number, enabled = true) =>
+  useQuery({ queryKey: keys.retro(projectId), queryFn: () => api.get<RetroPlan>(`/api/projects/${projectId}/retro-plan`), enabled });
 
 export function useRetroMutations(projectId: number) {
   const qc = useQueryClient();
@@ -248,5 +387,8 @@ export function usePokerMutations(projectId: number) {
 }
 
 // ---------- Portefeuille ----------
-export const usePortfolio = (enabled = true) =>
-  useQuery({ queryKey: keys.portfolio, queryFn: () => api.get<Portfolio>('/api/portfolio'), enabled });
+export const usePortfolio = (teamId?: number) =>
+  useQuery({
+    queryKey: [...keys.portfolio, teamId ?? 'all'],
+    queryFn: () => api.get<Portfolio>(teamId ? `/api/portfolio?teamId=${teamId}` : '/api/portfolio'),
+  });

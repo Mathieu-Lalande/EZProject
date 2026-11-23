@@ -2,14 +2,18 @@ import { useMemo, useState, type FormEvent } from 'react';
 import { Eye, RotateCcw, Spade, CheckCircle2, Sparkles } from 'lucide-react';
 import clsx from 'clsx';
 import { usePokerDeck, usePokerMutations, usePokerRounds, useTasks } from '../../api/hooks';
-import type { PokerRound } from '../../api/types';
+import type { PokerRound, Project } from '../../api/types';
+import { can } from '../../lib/permissions';
 import { Button } from '../../components/ui/Button';
 import { Badge } from '../../components/ui/Badge';
 import { Spinner } from '../../components/ui/Spinner';
 import { EmptyState } from '../../components/ui/EmptyState';
 import { PokerCard, ParticipantCard } from './PokerCard';
 
-export function PokerRoom({ projectId }: { projectId: number }) {
+export function PokerRoom({ project }: { project: Project }) {
+  const projectId = project.id;
+  const canVote = can(project, 'POKER_VOTE');
+  const canFacilitate = can(project, 'POKER_FACILITATE');
   const { data: rounds = [], isLoading } = usePokerRounds(projectId);
   const { data: deck = [] } = usePokerDeck();
   const { data: tasks = [] } = useTasks(projectId);
@@ -66,7 +70,7 @@ export function PokerRoom({ projectId }: { projectId: number }) {
               </div>
             )}
 
-            {current.status === 'VOTING' && (
+            {current.status === 'VOTING' && canVote && (
               <div className="flex flex-wrap justify-center gap-2.5">
                 {deck.map((c) => (
                   <PokerCard key={c} value={c} selected={current.myCard === c} onSelect={(card) => m.vote.mutate({ roundId: current.id, card })} />
@@ -74,7 +78,7 @@ export function PokerRoom({ projectId }: { projectId: number }) {
               </div>
             )}
 
-            <div className="mt-6 flex flex-wrap justify-center gap-2">
+            {canFacilitate && <div className="mt-6 flex flex-wrap justify-center gap-2">
               {current.status === 'VOTING' && (
                 <Button icon={<Eye className="size-4" />} onClick={() => m.reveal.mutate(current.id)} disabled={current.votes.length === 0} loading={m.reveal.isPending}>
                   Révéler les cartes
@@ -90,14 +94,14 @@ export function PokerRoom({ projectId }: { projectId: number }) {
                   ))}
                 </>
               )}
-            </div>
+            </div>}
             {current.status === 'REVEALED' && current.taskId && <p className="mt-3 text-center text-xs text-ink-3">L'estimation validée sera reportée sur la tâche.</p>}
           </div>
         )}
       </div>
 
       <div className="space-y-4">
-        <form onSubmit={start} className="card space-y-3 p-4">
+        {canFacilitate && <form onSubmit={start} className="card space-y-3 p-4">
           <h3 className="text-sm font-semibold">Nouveau tour</h3>
           <select className="input" value={taskId} onChange={(e) => setTaskId(e.target.value)}>
             <option value="">Story libre…</option>
@@ -105,7 +109,7 @@ export function PokerRoom({ projectId }: { projectId: number }) {
           </select>
           {!taskId && <input className="input" placeholder="Titre de la story" maxLength={200} value={storyTitle} onChange={(e) => setStoryTitle(e.target.value)} />}
           <Button type="submit" className="w-full" icon={<Spade className="size-4" />} loading={m.start.isPending}>Lancer l'estimation</Button>
-        </form>
+        </form>}
 
         {rounds.length > 0 && (
           <div className="card p-2">

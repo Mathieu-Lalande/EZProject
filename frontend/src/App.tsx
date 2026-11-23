@@ -6,27 +6,26 @@ import { PortfolioPage } from './pages/PortfolioPage';
 import { MySpacePage } from './pages/MySpacePage';
 import { ProjectsPage } from './pages/ProjectsPage';
 import { ProjectPage } from './pages/ProjectPage';
-import { TeamPage } from './pages/TeamPage';
+import { OrganizationPage } from './pages/OrganizationPage';
+import { SignupPage } from './auth/SignupPage';
 
 function Home() {
   return <Navigate to={useIsManager() ? '/portfolio' : '/me'} replace />;
-}
-
-function ManagerOnly({ children }: { children: React.ReactNode }) {
-  return useIsManager() ? <>{children}</> : <Navigate to="/me" replace />;
 }
 
 export function App() {
   return (
     <Routes>
       <Route path="/login" element={<LoginPage />} />
+      <Route path="/signup" element={<SignupPage />} />
       <Route element={<RequireAuth><AppLayout /></RequireAuth>}>
         <Route index element={<Home />} />
-        <Route path="portfolio" element={<ManagerOnly><PortfolioPage /></ManagerOnly>} />
+        <Route path="portfolio" element={<PortfolioPage />} />
         <Route path="me" element={<MySpacePage />} />
         <Route path="projects" element={<ProjectsPage />} />
         <Route path="projects/:id/:tab?" element={<ProjectPage />} />
-        <Route path="team" element={<TeamPage />} />
+        <Route path="organization/:tab?" element={<OrganizationPage />} />
+        <Route path="team" element={<Navigate to="/organization/members" replace />} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>

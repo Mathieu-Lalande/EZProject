@@ -2,13 +2,18 @@ package com.ezproject.user;
 
 import java.time.Instant;
 
+import com.ezproject.organization.Organization;
+
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
+import jakarta.persistence.FetchType;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
 
 @Entity
@@ -18,6 +23,10 @@ public class AppUser {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
+
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
+    @JoinColumn(name = "organization_id")
+    private Organization organization;
 
     @Column(nullable = false, unique = true)
     private String email;
@@ -42,7 +51,9 @@ public class AppUser {
         // JPA
     }
 
-    public AppUser(String email, String displayName, String passwordHash, Role role, String jobTitle) {
+    public AppUser(Organization organization, String email, String displayName, String passwordHash, Role role,
+                   String jobTitle) {
+        this.organization = organization;
         this.email = email.toLowerCase();
         this.displayName = displayName;
         this.passwordHash = passwordHash;
@@ -55,7 +66,12 @@ public class AppUser {
         this.role = newRole;
     }
 
+    public boolean belongsTo(Organization org) {
+        return organization.getId().equals(org.getId());
+    }
+
     public Long getId() { return id; }
+    public Organization getOrganization() { return organization; }
     public String getEmail() { return email; }
     public String getDisplayName() { return displayName; }
     public String getPasswordHash() { return passwordHash; }

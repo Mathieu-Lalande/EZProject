@@ -1,23 +1,29 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
-import type { Health, Project, ProjectInput, ProjectStatus, ProjectType } from '../../api/types';
-import { useSaveProject, useUsers } from '../../api/hooks';
+import type { Health, Project, ProjectInput, ProjectPriority, ProjectStatus, ProjectType, Visibility } from '../../api/types';
+import { useMe, useSaveProject, useTeams, useUsers } from '../../api/hooks';
+import { isManager } from '../../lib/permissions';
 import { ApiError } from '../../api/client';
 import { Modal } from '../../components/ui/Modal';
 import { Field } from '../../components/ui/Field';
 import { Button } from '../../components/ui/Button';
 import { useToast } from '../../components/ui/Toast';
-import { healthLabel, projectStatusLabel, projectTypeLabel } from '../../lib/labels';
+import { healthLabel, projectPriorityLabel, projectStatusLabel, projectTypeLabel, visibilityLabel } from '../../lib/labels';
 
 const COLORS = ['#6366f1', '#8b5cf6', '#ec4899', '#ef4444', '#f59e0b', '#10b981', '#14b8a6', '#0ea5e9', '#64748b'];
 
 function toInput(p: Project | null): ProjectInput {
-  if (!p) return { code: '', name: '', type: 'DEVELOPMENT', status: 'PLANNED', health: 'GREEN', color: COLORS[0], description: '', client: '', ownerId: null, startDate: null, endDate: null, budgetDays: null };
-  return { code: p.code, name: p.name, type: p.type, status: p.status, health: p.health, color: p.color, description: p.description ?? '', client: p.client ?? '', ownerId: p.owner?.id ?? null, startDate: p.startDate, endDate: p.endDate, budgetDays: p.budgetDays };
+  if (!p) return { code: '', name: '', type: 'DEVELOPMENT', status: 'PLANNED', priority: 'P3', health: 'GREEN', visibility: 'TEAM', color: COLORS[0], description: '', client: '', ownerId: null, teamId: null, startDate: null, endDate: null, budgetDays: null };
+  return { code: p.code, name: p.name, type: p.type, status: p.status, statusReason: p.statusReason, priority: p.priority, health: p.health, visibility: p.visibility, color: p.color, description: p.description ?? '', client: p.client ?? '', ownerId: p.owner?.id ?? null, teamId: p.team?.id ?? null, startDate: p.startDate, endDate: p.endDate, budgetDays: p.budgetDays };
 }
 
 export function ProjectFormModal({ open, onClose, project }: { open: boolean; onClose: () => void; project: Project | null }) {
   const { data: users = [] } = useUsers();
+  const { data: teams = [] } = useTeams();
+  const { data: me } = useMe();
+  // Équipes où l'utilisateur peut créer : toutes pour un manager, sinon celles dont il est responsable
+  const allowedTeams = isManager(me) ? teams : teams.filter((t) => me?.teams.some((mt) => mt.teamId === t.id && mt.role === 'LEAD'));
+  const canManageAccess = !project || project.myPermissions.includes('PROJECT_MEMBERS');
   const save = useSaveProject();
   const toast = useToast();
   const navigate = useNavigate();
@@ -27,7 +33,8 @@ export function ProjectFormModal({ open, onClose, project }: { open: boolean; on
 
   useEffect(() => {
     if (open) {
-      setForm(toInput(project));
+      const initial = toInput(project);
+      setForm(!project && allowedTeams.length === 1 ? { ...initial, teamId: allowedTeams[0]!.id } : initial);
       setErrors({});
       setGlobalError(null);
     }
@@ -85,8 +92,29 @@ export function ProjectFormModal({ open, onClose, project }: { open: boolean; on
           <input className="input" maxLength={150} value={form.client ?? ''} onChange={(e) => set('client', e.target.value)} />
         </Field>
         <Field label="Statut">
-          <select className="input" value={form.status} onChange={(e) => set('status', e.target.value as ProjectStatus)}>
+          <select className="input" value={form.status ?? 'PLANNED'} onChange={(e) => set('status', e.target.value as ProjectStatus)}>
             {(Object.keys(projectStatusLabel) as ProjectStatus[]).map((s) => <option key={s} value={s}>{projectStatusLabel[s]}</option>)}
+          </select>
+        </Field>
+        <Field label="Priorité">
+          <select className="input" value={form.priority} onChange={(e) => set('priority', e.target.value as ProjectPriority)}>
+            {(Object.keys(projectPriorityLabel) as ProjectPriority[]).map((pr) => <option key={pr} value={pr}>{projectPriorityLabel[pr]}</option>)}
+          </select>
+        </Field>
+        {(form.status === 'ON_HOLD' || form.status === 'CANCELLED') && (
+          <Field label="Motif du statut (obligatoire)" className="sm:col-span-2">
+            <input className="input" required maxLength={500} value={form.statusReason ?? ''} onChange={(e) => set('statusReason', e.target.value)} />
+          </Field>
+        )}
+        <Field label="Équipe">
+          <select className="input" disabled={!canManageAccess} value={form.teamId ?? ''} onChange={(e) => set('teamId', e.target.value ? Number(e.target.value) : null)}>
+            {isManager(me) && <option value="">Aucune équipe</option>}
+            {(project ? teams : allowedTeams).map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
+          </select>
+        </Field>
+        <Field label="Visibilité">
+          <select className="input" disabled={!canManageAccess} value={form.visibility} onChange={(e) => set('visibility', e.target.value as Visibility)}>
+            {(Object.keys(visibilityLabel) as Visibility[]).map((v) => <option key={v} value={v}>{visibilityLabel[v].label} — {visibilityLabel[v].description}</option>)}
           </select>
         </Field>
         <Field label="Météo">

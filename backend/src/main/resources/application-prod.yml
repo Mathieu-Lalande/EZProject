@@ -17,3 +17,4 @@ app:
     # Crée un administrateur au premier démarrage si aucun utilisateur n'existe.
     email: ${ADMIN_EMAIL:}
     password: ${ADMIN_PASSWORD:}
+    organization: ${ADMIN_ORGANIZATION:Mon organisation}

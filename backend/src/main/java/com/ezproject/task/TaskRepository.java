@@ -19,25 +19,31 @@ public interface TaskRepository extends JpaRepository<Task, Long> {
     @EntityGraph(attributePaths = {"assignee", "project"})
     List<Task> findByAssigneeIdAndStatusNotOrderByDueDateAsc(Long assigneeId, TaskStatus status);
 
+    @EntityGraph(attributePaths = {"assignee", "project"})
+    List<Task> findByProjectIdInOrderByProjectIdAscStatusAscPositionAsc(List<Long> projectIds);
+
     int countByProjectIdAndStatus(Long projectId, TaskStatus status);
 
     /** Nombre de tâches par projet et par statut (vue portefeuille). */
+    /** Nombre de tâches par projet et par statut (vue portefeuille), limité aux projets donnés. */
     @Query("select t.project.id as projectId, t.status as status, count(t) as total "
-            + "from Task t group by t.project.id, t.status")
-    List<StatusCount> countByProjectAndStatus();
+            + "from Task t where t.project.id in :projectIds group by t.project.id, t.status")
+    List<StatusCount> countByProjectAndStatus(@Param("projectIds") List<Long> projectIds);
 
     @Query("select t.project.id as projectId, count(t) as total from Task t "
-            + "where t.status <> com.ezproject.task.TaskStatus.DONE and t.dueDate < :today group by t.project.id")
-    List<ProjectCount> countOverdueByProject(@Param("today") LocalDate today);
+            + "where t.project.id in :projectIds and t.status <> com.ezproject.task.TaskStatus.DONE "
+            + "and t.dueDate < :today group by t.project.id")
+    List<ProjectCount> countOverdueByProject(@Param("projectIds") List<Long> projectIds,
+                                             @Param("today") LocalDate today);
 
-    @Query("select count(t) from Task t where t.completedAt >= :since")
-    long countCompletedSince(@Param("since") Instant since);
+    @Query("select count(t) from Task t where t.project.id in :projectIds and t.completedAt >= :since")
+    long countCompletedSince(@Param("projectIds") List<Long> projectIds, @Param("since") Instant since);
 
-    /** Charge ouverte par personne (tâches non terminées assignées). */
+    /** Charge ouverte par personne (tâches non terminées assignées), sur les projets donnés. */
     @Query("select t.assignee.id as userId, count(t) as openTasks, coalesce(sum(t.storyPoints), 0) as openPoints "
-            + "from Task t where t.assignee is not null and t.status <> com.ezproject.task.TaskStatus.DONE "
-            + "group by t.assignee.id")
-    List<Workload> workloadByAssignee();
+            + "from Task t where t.project.id in :projectIds and t.assignee is not null "
+            + "and t.status <> com.ezproject.task.TaskStatus.DONE group by t.assignee.id")
+    List<Workload> workloadByAssignee(@Param("projectIds") List<Long> projectIds);
 
     interface StatusCount {
         Long getProjectId();

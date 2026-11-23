@@ -1,8 +1,8 @@
 import { useMemo, useState } from 'react';
-import { Activity, AlertTriangle, CheckCheck, Clock, FolderKanban, LayoutGrid, Rows3, SlidersHorizontal } from 'lucide-react';
+import { Activity, AlertTriangle, CheckCheck, Clock, Download, Flame, FolderKanban, LayoutGrid, PauseCircle, Rows3, SlidersHorizontal } from 'lucide-react';
 import clsx from 'clsx';
 import { usePortfolio } from '../api/hooks';
-import type { ProjectType } from '../api/types';
+import type { ProjectStatus, ProjectType } from '../api/types';
 import { PageHeader } from '../components/ui/PageHeader';
 import { Spinner } from '../components/ui/Spinner';
 import { Button } from '../components/ui/Button';
@@ -25,7 +25,9 @@ const WIDGETS: { id: WidgetId; label: string }[] = [
 ];
 
 export function PortfolioPage() {
-  const { data, isLoading } = usePortfolio();
+  const [teamId, setTeamId] = useLocalStorage<number | null>('ez-portfolio-team', null);
+  const { data, isLoading } = usePortfolio(teamId ?? undefined);
+  const [statusFilter, setStatusFilter] = useState<ProjectStatus | 'OPEN'>('OPEN');
   const [visible, setVisible] = useLocalStorage<WidgetId[]>('ez-portfolio-widgets', WIDGETS.map((w) => w.id));
   const [view, setView] = useLocalStorage<'table' | 'cards'>('ez-portfolio-view', 'table');
   const [typeFilter, setTypeFilter] = useState<ProjectType | 'ALL'>('ALL');
@@ -36,8 +38,9 @@ export function PortfolioPage() {
     () =>
       (data?.projects ?? [])
         .filter((p) => showClosed || ['PLANNED', 'ACTIVE', 'ON_HOLD'].includes(p.status))
+        .filter((p) => statusFilter === 'OPEN' || p.status === statusFilter)
         .filter((p) => typeFilter === 'ALL' || p.type === typeFilter),
-    [data, typeFilter, showClosed],
+    [data, typeFilter, showClosed, statusFilter],
   );
 
   if (isLoading || !data) return <Spinner />;
@@ -50,14 +53,20 @@ export function PortfolioPage() {
       <PageHeader
         eyebrow={today.charAt(0).toUpperCase() + today.slice(1)}
         title="Portefeuille projets"
-        subtitle="Vue consolidée pour piloter l'ensemble des projets de l'organisation."
+        subtitle={data.scope === 'ORGANIZATION'
+          ? "Vue consolidée de tous les projets de l'organisation, triés par priorité."
+          : 'Vue consolidée des projets auxquels vous avez accès.'}
         actions={
-          <div className="relative">
+          <div className="relative flex gap-2">
+            <a href={`/api/export/portfolio.csv${teamId ? `?teamId=${teamId}` : ''}`} download
+              className="inline-flex h-9 items-center gap-2 rounded-lg border border-line bg-surface px-3.5 text-sm font-medium hover:bg-surface-2">
+              <Download className="size-4" />Exporter
+            </a>
             <Button variant="secondary" icon={<SlidersHorizontal className="size-4" />} onClick={() => setCustomizing((c) => !c)}>
               Personnaliser
             </Button>
             {customizing && (
-              <div className="absolute right-0 z-20 mt-2 w-60 animate-pop-in rounded-xl border border-line bg-surface p-2 shadow-pop">
+              <div className="absolute top-full right-0 z-20 mt-2 w-60 animate-pop-in rounded-xl border border-line bg-surface p-2 shadow-pop">
                 <div className="px-2 py-1.5 text-xs font-medium text-ink-3">Widgets affichés</div>
                 {WIDGETS.map((w) => (
                   <label key={w.id} className="flex cursor-pointer items-center gap-2.5 rounded-lg px-2 py-1.5 text-sm hover:bg-surface-2">
@@ -72,12 +81,25 @@ export function PortfolioPage() {
       />
 
       {has('kpis') && (
-        <div className="mb-6 grid grid-cols-2 gap-4 lg:grid-cols-5">
+        <div className="mb-6 grid grid-cols-2 gap-4 md:grid-cols-4 2xl:grid-cols-7">
           <KpiCard label="Projets ouverts" value={data.kpis.openProjects} icon={<FolderKanban className="size-4" />} />
+          <KpiCard label="Priorité P1" value={data.kpis.p1Projects} icon={<Flame className="size-4" />} tone="red" />
+          <KpiCard label="En pause" value={data.kpis.onHoldProjects} icon={<PauseCircle className="size-4" />} tone="amber" />
           <KpiCard label="Projets à risque" value={data.kpis.atRiskProjects} icon={<AlertTriangle className="size-4" />} tone={data.kpis.atRiskProjects ? 'amber' : 'green'} />
           <KpiCard label="Tâches ouvertes" value={data.kpis.openTasks} icon={<Activity className="size-4" />} />
           <KpiCard label="Tâches en retard" value={data.kpis.overdueTasks} icon={<Clock className="size-4" />} tone={data.kpis.overdueTasks ? 'red' : 'green'} />
           <KpiCard label="Terminées (7 j)" value={data.kpis.completedLast7Days} icon={<CheckCheck className="size-4" />} tone="green" />
+        </div>
+      )}
+
+      {data.teams.length > 1 && (
+        <div className="mb-5 flex flex-wrap items-center gap-2">
+          <span className="text-xs font-medium text-ink-3">Équipe</span>
+          <TeamChip active={teamId === null} onClick={() => setTeamId(null)} label="Toutes" />
+          {data.teams.map((t) => (
+            <TeamChip key={t.id} active={teamId === t.id} onClick={() => setTeamId(t.id)} color={t.color}
+              label={t.name} count={t.openProjects} risk={t.atRiskProjects} />
+          ))}
         </div>
       )}
 
@@ -97,6 +119,15 @@ export function PortfolioPage() {
                     </button>
                   ))}
                 </div>
+                <select className="rounded-lg border border-line bg-surface px-2 py-1.5 text-xs" value={statusFilter}
+                  onChange={(e) => setStatusFilter(e.target.value as ProjectStatus | 'OPEN')} aria-label="Filtrer par statut">
+                  <option value="OPEN">Tous statuts</option>
+                  <option value="ACTIVE">En cours</option>
+                  <option value="PLANNED">Planifiés</option>
+                  <option value="ON_HOLD">En pause</option>
+                  {showClosed && <option value="COMPLETED">Terminés</option>}
+                  {showClosed && <option value="CANCELLED">Annulés</option>}
+                </select>
                 <label className="flex items-center gap-1.5 text-xs text-ink-3">
                   <input type="checkbox" className="accent-brand-600" checked={showClosed} onChange={(e) => setShowClosed(e.target.checked)} />
                   Inclure terminés
@@ -117,5 +148,22 @@ export function PortfolioPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+function TeamChip({ active, onClick, label, color, count, risk }: { active: boolean; onClick: () => void; label: string; color?: string; count?: number; risk?: number }) {
+  return (
+    <button
+      onClick={onClick}
+      className={clsx(
+        'flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium transition',
+        active ? 'border-brand-500 bg-brand-50 text-brand-700 dark:bg-brand-500/15 dark:text-brand-200' : 'border-line bg-surface text-ink-2 hover:border-brand-300',
+      )}
+    >
+      {color && <span className="size-2 rounded-full" style={{ backgroundColor: color }} />}
+      {label}
+      {count !== undefined && <span className="text-ink-3 tabular-nums">{count}</span>}
+      {!!risk && <span className="rounded-full bg-amber-500 px-1.5 text-[10px] text-white tabular-nums">{risk}</span>}
+    </button>
   );
 }
