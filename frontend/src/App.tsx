@@ -10,6 +10,7 @@ import { OrganizationPage } from './pages/OrganizationPage';
 import { SignupPage } from './auth/SignupPage';
 import { AccountPage } from './pages/AccountPage';
 import { PrivacyPage } from './pages/PrivacyPage';
+import { CapacityPage } from './pages/CapacityPage';
 
 function Home() {
   return <Navigate to={useIsManager() ? '/portfolio' : '/me'} replace />;
@@ -26,6 +27,7 @@ export function App() {
         <Route path="portfolio" element={<PortfolioPage />} />
         <Route path="me" element={<MySpacePage />} />
         <Route path="account" element={<AccountPage />} />
+        <Route path="capacity" element={<CapacityPage />} />
         <Route path="projects" element={<ProjectsPage />} />
         <Route path="projects/:id/:tab?" element={<ProjectPage />} />
         <Route path="organization/:tab?" element={<OrganizationPage />} />

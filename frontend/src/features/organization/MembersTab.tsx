@@ -1,7 +1,8 @@
 import { useState, type FormEvent } from 'react';
 import { Ban, Copy, KeyRound, MoreHorizontal, RotateCcw, Trash2, UserPlus } from 'lucide-react';
 import { Dropdown, MenuItem } from '../../components/ui/Dropdown';
-import { useChangeUserRole, useCreateUser, useMe, useUserAdmin, useUsers } from '../../api/hooks';
+import { useChangeCapacity, useChangeUserRole, useCreateUser, useMe, useUserAdmin, useUsers } from '../../api/hooks';
+import { isManager } from '../../lib/permissions';
 import type { Role } from '../../api/types';
 import { ApiError } from '../../api/client';
 import { Avatar } from '../../components/ui/Avatar';
@@ -22,6 +23,7 @@ export function MembersTab() {
   const { data: me } = useMe();
   const changeRole = useChangeUserRole();
   const admin$ = useUserAdmin();
+  const changeCapacity = useChangeCapacity();
   const toast = useToast();
   const [open, setOpen] = useState(false);
   const [temporary, setTemporary] = useState<{ name: string; password: string } | null>(null);
@@ -50,6 +52,13 @@ export function MembersTab() {
                   </div>
                   <div className="truncate text-xs text-ink-3">{u.jobTitle ? `${u.jobTitle} · ` : ''}{u.email}</div>
                 </div>
+                {isManager(me) && u.role !== 'GUEST' ? (
+                  <select className="rounded-lg border border-line bg-surface px-1.5 py-1 text-xs tabular-nums" title="Temps de travail (jours / semaine)"
+                    aria-label={`Temps de travail de ${u.displayName}`} value={u.capacityDaysPerWeek}
+                    onChange={(e) => changeCapacity.mutate({ userId: u.id, daysPerWeek: Number(e.target.value) }, { onSuccess: () => toast('success', 'Temps de travail mis à jour'), onError })}>
+                    {[5, 4.5, 4, 3.5, 3, 2.5, 2, 1.5, 1, 0.5].map((d) => <option key={d} value={d}>{d} j/sem.</option>)}
+                  </select>
+                ) : u.role !== 'GUEST' && <span className="text-xs text-ink-3 tabular-nums">{u.capacityDaysPerWeek} j/sem.</span>}
                 {editable ? (
                   <select
                     className="rounded-lg border border-line bg-surface px-2 py-1 text-sm"

@@ -5,8 +5,10 @@ import java.util.Set;
 
 /** Nature du projet : détermine les modules activés par défaut. */
 public enum ProjectType {
-    DEVELOPMENT(EnumSet.of(ModuleType.BOARD, ModuleType.TODOS, ModuleType.RETRO_PLANNING, ModuleType.POKER)),
-    CONSULTING(EnumSet.of(ModuleType.BOARD, ModuleType.TODOS, ModuleType.RETRO_PLANNING)),
+    DEVELOPMENT(EnumSet.of(ModuleType.BOARD, ModuleType.TODOS, ModuleType.RETRO_PLANNING, ModuleType.POKER,
+            ModuleType.TIME_TRACKING, ModuleType.RISKS)),
+    CONSULTING(EnumSet.of(ModuleType.BOARD, ModuleType.TODOS, ModuleType.RETRO_PLANNING, ModuleType.TIME_TRACKING,
+            ModuleType.RISKS)),
     INTERNAL(EnumSet.of(ModuleType.BOARD, ModuleType.TODOS));
 
     private final Set<ModuleType> defaultModules;

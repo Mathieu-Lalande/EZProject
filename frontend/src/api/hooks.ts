@@ -1,6 +1,15 @@
 import { useMutation, useQuery, useQueryClient, type QueryKey } from '@tanstack/react-query';
 import { api, request } from './client';
 import type {
+  Absence,
+  AbsenceKind,
+  Allocation,
+  Capacity,
+  HolidayCalendar,
+  TimeEntry,
+  TimeSummary,
+  Timesheet,
+  WeekCell,
   AuditEntry,
   PageDto,
   ImportReport,
@@ -458,3 +467,97 @@ export const usePortfolio = (teamId?: number) =>
     queryKey: [...keys.portfolio, teamId ?? 'all'],
     queryFn: () => api.get<Portfolio>(teamId ? `/api/portfolio?teamId=${teamId}` : '/api/portfolio'),
   });
+
+// ---------- Temps & budget ----------
+export const useTimeSummary = (projectId: number) =>
+  useQuery({ queryKey: ['projects', projectId, 'time', 'summary'], queryFn: () => api.get<TimeSummary>(`/api/projects/${projectId}/time/summary`) });
+
+export const useTimeEntries = (projectId: number, page: number) =>
+  useQuery({
+    queryKey: ['projects', projectId, 'time', 'entries', page],
+    queryFn: () => api.get<PageDto<TimeEntry>>(`/api/projects/${projectId}/time?page=${page}&size=15`),
+    placeholderData: (previous) => previous,
+  });
+
+export function useTimeMutations(projectId: number) {
+  const invalidate = useInvalidate();
+  const onSuccess = () => invalidate(['projects', projectId, 'time'], keys.portfolio, ['timesheet']);
+  return {
+    log: useMutation({
+      mutationFn: (input: { date: string; days: number; taskId?: number | null; userId?: number | null; comment?: string }) =>
+        api.post<TimeEntry>(`/api/projects/${projectId}/time`, input),
+      onSuccess,
+    }),
+    remove: useMutation({ mutationFn: (id: number) => api.delete(`/api/time/${id}`), onSuccess }),
+  };
+}
+
+export const useTimesheet = (date: string) =>
+  useQuery({ queryKey: ['timesheet', date], queryFn: () => api.get<Timesheet>(`/api/time/week?date=${date}`) });
+
+export function useSaveTimesheet() {
+  const invalidate = useInvalidate();
+  return useMutation({
+    mutationFn: (input: { weekStart: string; cells: WeekCell[] }) => api.put<Timesheet>('/api/time/week', input),
+    onSuccess: () => invalidate(['timesheet'], keys.portfolio, ['projects']),
+  });
+}
+
+// ---------- Capacité ----------
+export const useAllocations = (projectId: number, enabled = true) =>
+  useQuery({ queryKey: ['projects', projectId, 'allocations'], queryFn: () => api.get<Allocation[]>(`/api/projects/${projectId}/allocations`), enabled });
+
+export function useAllocationMutations(projectId: number) {
+  const invalidate = useInvalidate();
+  const onSuccess = () => invalidate(['projects', projectId, 'allocations'], ['capacity']);
+  return {
+    create: useMutation({
+      mutationFn: (input: { userId: number; startDate: string; endDate: string; daysPerWeek: number }) =>
+        api.post<Allocation>(`/api/projects/${projectId}/allocations`, input),
+      onSuccess,
+    }),
+    remove: useMutation({ mutationFn: (id: number) => api.delete(`/api/allocations/${id}`), onSuccess }),
+  };
+}
+
+export const useCapacity = (from: string, weeks: number, teamId?: number) =>
+  useQuery({
+    queryKey: ['capacity', from, weeks, teamId ?? 'all'],
+    queryFn: () => api.get<Capacity>(`/api/capacity?from=${from}&weeks=${weeks}${teamId ? `&teamId=${teamId}` : ''}`),
+    placeholderData: (previous) => previous,
+  });
+
+export const useAbsences = (from: string, to: string) =>
+  useQuery({ queryKey: ['absences', from, to], queryFn: () => api.get<Absence[]>(`/api/absences?from=${from}&to=${to}`) });
+
+export const useMyAbsences = () => useQuery({ queryKey: ['absences', 'mine'], queryFn: () => api.get<Absence[]>('/api/absences/mine') });
+
+export function useAbsenceMutations() {
+  const invalidate = useInvalidate();
+  const onSuccess = () => invalidate(['absences'], ['capacity']);
+  return {
+    create: useMutation({
+      mutationFn: (input: { startDate: string; endDate: string; kind: AbsenceKind; comment?: string; userId?: number }) =>
+        api.post<Absence>('/api/absences', input),
+      onSuccess,
+    }),
+    remove: useMutation({ mutationFn: (id: number) => api.delete(`/api/absences/${id}`), onSuccess }),
+  };
+}
+
+export function useChangeCapacity() {
+  const invalidate = useInvalidate();
+  return useMutation({
+    mutationFn: ({ userId, daysPerWeek }: { userId: number; daysPerWeek: number }) =>
+      api.put(`/api/users/${userId}/capacity`, { daysPerWeek }),
+    onSuccess: () => invalidate(keys.users, ['capacity']),
+  });
+}
+
+export function useChangeHolidayCalendar() {
+  const invalidate = useInvalidate();
+  return useMutation({
+    mutationFn: (calendar: HolidayCalendar) => api.put('/api/organization/holiday-calendar', { calendar }),
+    onSuccess: () => invalidate(keys.organization, ['projects'], ['capacity'], ['timesheet']),
+  });
+}

@@ -23,6 +23,7 @@ export function ProjectsHealthTable({ projects }: { projects: ProjectSummary[] }
               <th className="px-3 py-2.5 font-medium">Responsable</th>
               <th className="px-3 py-2.5 font-medium">Météo</th>
               <th className="w-44 px-3 py-2.5 font-medium">Avancement</th>
+              <th className="px-3 py-2.5 font-medium">Budget</th>
               <th className="px-3 py-2.5 font-medium">Retards</th>
               <th className="px-3 py-2.5 font-medium">Prochain jalon</th>
               <th className="px-4 py-2.5 text-right font-medium">Échéance</th>
@@ -64,6 +65,14 @@ export function ProjectsHealthTable({ projects }: { projects: ProjectSummary[] }
                     <span className="w-9 text-right text-xs tabular-nums text-ink-2">{p.progress}%</span>
                   </div>
                   <div className="mt-1 text-[11px] text-ink-3">{p.tasksByStatus.DONE}/{p.tasksTotal} tâches</div>
+                </td>
+                <td className="px-3 py-3 whitespace-nowrap">
+                  {p.budgetPct === null ? <span className="text-xs text-ink-3">—</span> : (
+                    <span title={`${p.consumedDays} j consommés sur ${p.budgetDays} j`}
+                      className={clsx('text-xs font-semibold tabular-nums', p.budgetPct > 100 ? 'text-red-600' : p.budgetPct - p.progress > 25 ? 'text-amber-600' : 'text-ink-2')}>
+                      {p.budgetPct}%<span className="block text-[11px] font-normal text-ink-3">{Math.round(p.consumedDays)}/{p.budgetDays} j</span>
+                    </span>
+                  )}
                 </td>
                 <td className="px-3 py-3">
                   <div className="flex flex-wrap gap-1">

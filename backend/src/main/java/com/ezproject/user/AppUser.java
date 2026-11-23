@@ -1,5 +1,6 @@
 package com.ezproject.user;
 
+import java.math.BigDecimal;
 import java.time.Instant;
 
 import com.ezproject.organization.Organization;
@@ -56,6 +57,10 @@ public class AppUser {
     @Column(name = "deleted_at")
     private Instant deletedAt;
 
+    /** Jours travaillés par semaine (temps partiel : 4, 4.5…) : base du calcul de capacité. */
+    @Column(name = "capacity_days_per_week", nullable = false)
+    private BigDecimal capacityDaysPerWeek = BigDecimal.valueOf(5);
+
     protected AppUser() {
         // JPA
     }
@@ -90,6 +95,10 @@ public class AppUser {
     public void resetPassword(String temporaryHash) {
         this.passwordHash = temporaryHash;
         this.mustChangePassword = true;
+    }
+
+    public void changeCapacity(BigDecimal daysPerWeek) {
+        this.capacityDaysPerWeek = daysPerWeek;
     }
 
     public void setActive(boolean value) {
@@ -129,4 +138,5 @@ public class AppUser {
     public boolean isActive() { return active; }
     public boolean isMustChangePassword() { return mustChangePassword; }
     public Instant getDeletedAt() { return deletedAt; }
+    public BigDecimal getCapacityDaysPerWeek() { return capacityDaysPerWeek; }
 }

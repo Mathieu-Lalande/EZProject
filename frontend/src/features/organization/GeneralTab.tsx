@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Check, Download, ShieldAlert, Sparkles } from 'lucide-react';
-import { useDeleteOrganization } from '../../api/hooks';
+import { useChangeHolidayCalendar, useDeleteOrganization } from '../../api/hooks';
+import type { HolidayCalendar } from '../../api/types';
 import { Field } from '../../components/ui/Field';
 import clsx from 'clsx';
 import { useMe, useOrganization, useOrganizationMutations } from '../../api/hooks';
@@ -46,6 +47,7 @@ export function GeneralTab() {
           )}
         </div>
         <p className="mt-2 text-xs text-ink-3">Identifiant : {org.slug}</p>
+        <CalendarSetting value={org.holidayCalendar} editable={isAdmin(me)} />
       </section>
 
       <section className="card max-w-2xl p-5">
@@ -126,5 +128,20 @@ function DangerZone({ name }: { name: string }) {
         </Button>
       </div>
     </section>
+  );
+}
+
+function CalendarSetting({ value, editable }: { value: HolidayCalendar; editable: boolean }) {
+  const change = useChangeHolidayCalendar();
+  const toast = useToast();
+  return (
+    <label className="mt-4 block">
+      <span className="label">Jours fériés (rétro-planning, capacité, feuilles de temps)</span>
+      <select className="input max-w-sm" disabled={!editable || change.isPending} value={value}
+        onChange={(e) => change.mutate(e.target.value as HolidayCalendar, { onSuccess: () => toast('success', 'Calendrier mis à jour') })}>
+        <option value="FR">France (jours fériés légaux)</option>
+        <option value="NONE">Aucun (week-ends uniquement)</option>
+      </select>
+    </label>
   );
 }

@@ -20,7 +20,7 @@ public record PortfolioDto(Scope scope, Kpis kpis, List<ProjectSummary> projects
     public enum Scope { ORGANIZATION, MY_PROJECTS }
 
     public record Kpis(int openProjects, int atRiskProjects, int onHoldProjects, int p1Projects, long openTasks,
-                       long overdueTasks, long completedLast7Days) {
+                       long overdueTasks, long completedLast7Days, int overBudgetProjects) {
     }
 
     public record ProjectSummary(
@@ -28,7 +28,7 @@ public record PortfolioDto(Scope scope, Kpis kpis, List<ProjectSummary> projects
             String statusReason, ProjectPriority priority, Health health, String color, String ownerName,
             Long teamId, String teamName, LocalDate startDate, LocalDate endDate, Long daysRemaining, int progress,
             long tasksTotal, Map<TaskStatus, Long> tasksByStatus, long overdueTasks, Milestone nextMilestone,
-            long latePhases, boolean atRisk) {
+            long latePhases, boolean atRisk, Integer budgetDays, java.math.BigDecimal consumedDays, Integer budgetPct) {
     }
 
     public record Milestone(String name, LocalDate date) {

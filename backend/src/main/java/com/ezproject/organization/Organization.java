@@ -2,6 +2,8 @@ package com.ezproject.organization;
 
 import java.time.Instant;
 
+import com.ezproject.calendar.HolidayCalendar;
+
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -36,6 +38,10 @@ public class Organization {
     @Column(name = "created_at", nullable = false)
     private Instant createdAt;
 
+    @Enumerated(EnumType.STRING)
+    @Column(name = "holiday_calendar", nullable = false)
+    private HolidayCalendar holidayCalendar = HolidayCalendar.FR;
+
     protected Organization() {
         // JPA
     }
@@ -55,6 +61,10 @@ public class Organization {
         this.plan = newPlan;
     }
 
+    public void changeHolidayCalendar(HolidayCalendar calendar) {
+        this.holidayCalendar = calendar;
+    }
+
     public void markPermissionsCustomized(boolean customized) {
         this.customPermissions = customized;
     }
@@ -65,4 +75,5 @@ public class Organization {
     public Plan getPlan() { return plan; }
     public boolean hasCustomPermissions() { return customPermissions; }
     public Instant getCreatedAt() { return createdAt; }
+    public HolidayCalendar getHolidayCalendar() { return holidayCalendar; }
 }

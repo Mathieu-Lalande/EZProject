@@ -18,11 +18,20 @@ export type Permission =
   | 'RETRO_EDIT'
   | 'POKER_VIEW'
   | 'POKER_VOTE'
-  | 'POKER_FACILITATE';
+  | 'POKER_FACILITATE'
+  | 'TIME_VIEW'
+  | 'TIME_LOG'
+  | 'TIME_MANAGE'
+  | 'RISK_VIEW'
+  | 'RISK_EDIT'
+  | 'REPORT_EDIT'
+  | 'TASK_COMMENT';
+export type HolidayCalendar = 'NONE' | 'FR';
+export type AbsenceKind = 'VACATION' | 'SICK' | 'TRAINING' | 'OTHER';
 export type ProjectType = 'DEVELOPMENT' | 'CONSULTING' | 'INTERNAL';
 export type ProjectStatus = 'PLANNED' | 'ACTIVE' | 'ON_HOLD' | 'COMPLETED' | 'CANCELLED';
 export type Health = 'GREEN' | 'AMBER' | 'RED';
-export type ModuleType = 'BOARD' | 'TODOS' | 'RETRO_PLANNING' | 'POKER';
+export type ModuleType = 'BOARD' | 'TODOS' | 'RETRO_PLANNING' | 'POKER' | 'TIME_TRACKING' | 'RISKS';
 export type TaskStatus = 'BACKLOG' | 'TODO' | 'IN_PROGRESS' | 'REVIEW' | 'DONE';
 export type Priority = 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
 export type PhaseKind = 'PHASE' | 'MILESTONE';
@@ -36,6 +45,7 @@ export interface User {
   role: Role;
   jobTitle: string | null;
   active: boolean;
+  capacityDaysPerWeek: number;
 }
 
 export interface PageDto<T> {
@@ -56,7 +66,7 @@ export interface AuditEntry {
   createdAt: string;
 }
 
-export interface Me extends Omit<User, 'active'> {
+export interface Me extends Omit<User, 'active' | 'capacityDaysPerWeek'> {
   organization: { id: number; name: string; slug: string; plan: Plan };
   teams: { teamId: number; teamName: string; role: ProjectRole }[];
   mustChangePassword: boolean;
@@ -130,6 +140,7 @@ export interface Organization {
   slug: string;
   plan: Plan;
   usage: { projects: number; maxProjects: number; users: number; maxUsers: number; customPermissions: boolean };
+  holidayCalendar: HolidayCalendar;
 }
 
 export interface ImportReport {
@@ -267,6 +278,9 @@ export interface ProjectSummary {
   nextMilestone: { name: string; date: string } | null;
   latePhases: number;
   atRisk: boolean;
+  budgetDays: number | null;
+  consumedDays: number;
+  budgetPct: number | null;
 }
 
 export interface Portfolio {
@@ -277,10 +291,90 @@ export interface Portfolio {
     atRiskProjects: number;
     onHoldProjects: number;
     p1Projects: number;
+    overBudgetProjects: number;
     openTasks: number;
     overdueTasks: number;
     completedLast7Days: number;
   };
   projects: ProjectSummary[];
   workload: { userId: number; displayName: string; jobTitle: string | null; openTasks: number; openPoints: number }[];
+}
+
+// ---------- Temps & budget ----------
+export interface TimeSummary {
+  budgetDays: number | null;
+  consumedDays: number;
+  remainingDays: number | null;
+  consumptionPct: number | null;
+  weeklyBurn: number;
+  projectedExhaustion: string | null;
+  overBudget: boolean;
+  byUser: { userId: number; name: string; days: number }[];
+  byMonth: { month: string; days: number }[];
+}
+
+export interface TimeEntry {
+  id: number;
+  date: string;
+  days: number;
+  userId: number;
+  userName: string;
+  taskId: number | null;
+  taskTitle: string | null;
+  comment: string | null;
+  editable: boolean;
+}
+
+export interface WeekCell {
+  projectId: number;
+  date: string;
+  days: number;
+}
+
+export interface Timesheet {
+  weekStart: string;
+  days: string[];
+  workingDays: boolean[];
+  projects: { projectId: number; code: string; name: string; color: string }[];
+  cells: WeekCell[];
+  taskEntries: TimeEntry[];
+}
+
+// ---------- Capacité ----------
+export interface Allocation {
+  id: number;
+  projectId: number;
+  projectCode: string;
+  projectName: string;
+  projectColor: string;
+  userId: number;
+  userName: string;
+  startDate: string;
+  endDate: string;
+  daysPerWeek: number;
+}
+
+export interface Absence {
+  id: number;
+  userId: number;
+  userName: string;
+  startDate: string;
+  endDate: string;
+  kind: AbsenceKind | null;
+  comment: string | null;
+  editable: boolean;
+}
+
+export interface WeekLoad {
+  weekStart: string;
+  capacity: number;
+  absent: number;
+  available: number;
+  allocated: number;
+  loadPct: number | null;
+}
+
+export interface Capacity {
+  weeks: string[];
+  people: { userId: number; displayName: string; jobTitle: string | null; daysPerWeek: number; weeks: WeekLoad[]; allocations: Allocation[] }[];
 }

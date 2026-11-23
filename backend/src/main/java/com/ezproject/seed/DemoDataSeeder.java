@@ -16,7 +16,17 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigDecimal;
+
 import com.ezproject.access.ProjectMember;
+import com.ezproject.calendar.HolidayCalendar;
+import com.ezproject.capacity.Absence;
+import com.ezproject.capacity.AbsenceKind;
+import com.ezproject.capacity.AbsenceRepository;
+import com.ezproject.capacity.Allocation;
+import com.ezproject.capacity.AllocationRepository;
+import com.ezproject.time.TimeEntry;
+import com.ezproject.time.TimeEntryRepository;
 import com.ezproject.access.ProjectMemberRepository;
 import com.ezproject.access.ProjectRole;
 import com.ezproject.access.Visibility;
@@ -76,6 +86,17 @@ class DemoDataSeeder implements ApplicationRunner {
     private final Clock clock;
     private final String demoPassword;
     private String hash;
+    private TimeEntryRepository timeEntries;
+    private AllocationRepository allocations;
+    private AbsenceRepository absences;
+
+    @org.springframework.beans.factory.annotation.Autowired
+    void setCapacityRepositories(TimeEntryRepository timeEntries, AllocationRepository allocations,
+                                 AbsenceRepository absences) {
+        this.timeEntries = timeEntries;
+        this.allocations = allocations;
+        this.absences = absences;
+    }
 
     DemoDataSeeder(OrganizationRepository organizations, AppUserRepository users, TeamRepository teams,
                    TeamMembershipRepository teamMembers, ProjectRepository projects,
@@ -203,6 +224,32 @@ class DemoDataSeeder implements ApplicationRunner {
 
         poker.save(new PokerRound(portail, paiement, paiement.getTitle()));
 
+        // Temps passés (jours ouvrés passés) : PORTAIL dans les clous, AUDITSI consomme plus vite qu'il n'avance
+        logTime(portail, hugo, today, 30, "0.75");
+        logTime(portail, sarah, today, 30, "0.5");
+        logTime(mobile, hugo, today, 45, "0.25");
+        logTime(mobile, sarah, today, 60, "0.5");
+        logTime(audit, thomas, today, 12, "0.75");
+        logTime(audit, nina, today, 12, "1");
+        logTime(datalake, nina, today.minusDays(20), 10, "0.5");
+        logTime(manda, thomas, today, 5, "0.25");
+
+        // Staffing des 2 prochains mois : Hugo est surchargé (5,5 j/sem. pour 5 disponibles)
+        allocate(portail, hugo, today.minusWeeks(2), today.plusWeeks(8), "3");
+        allocate(mobile, hugo, today.minusWeeks(2), today.plusWeeks(4), "2.5");
+        allocate(portail, sarah, today.minusWeeks(2), today.plusWeeks(8), "2.5");
+        allocate(mobile, sarah, today.minusWeeks(2), today.plusWeeks(4), "2");
+        allocate(audit, thomas, today.minusWeeks(2), today.plusWeeks(4), "3");
+        allocate(manda, thomas, today.minusWeeks(1), today.plusWeeks(4), "1.5");
+        allocate(audit, nina, today.minusWeeks(2), today.plusWeeks(4), "4");
+        allocate(manda, camille, today.minusWeeks(1), today.plusWeeks(4), "1");
+        nina.changeCapacity(new BigDecimal("4"));
+
+        absences.save(new Absence(sarah, today.plusWeeks(1).with(java.time.DayOfWeek.MONDAY),
+                today.plusWeeks(1).with(java.time.DayOfWeek.WEDNESDAY), AbsenceKind.VACATION, "Congés"));
+        absences.save(new Absence(thomas, today.plusWeeks(2).with(java.time.DayOfWeek.THURSDAY),
+                today.plusWeeks(2).with(java.time.DayOfWeek.FRIDAY), AbsenceKind.TRAINING, "Formation TOGAF"));
+
         // Second locataire : ses données ne doivent jamais être visibles depuis Horizon Conseil
         Organization acme = organizations.save(new Organization("Acme Industries", "acme", Plan.FREE));
         AppUser bob = user(acme, "bob", "Bob Durand", Role.OWNER, "Directeur de projet");
@@ -214,6 +261,22 @@ class DemoDataSeeder implements ApplicationRunner {
         task(erp, new EnumMap<>(TaskStatus.class), "Reprise des données articles", TaskStatus.TODO, Priority.HIGH, bob, 8, today.plusDays(12));
 
         log.info("Données de démonstration créées : Horizon Conseil (*@ezproject.local) et Acme Industries (bob@acme.local)");
+    }
+
+    private void logTime(Project project, AppUser user, LocalDate until, int workingDays, String days) {
+        LocalDate d = until.minusDays(1);
+        int logged = 0;
+        while (logged < workingDays) {
+            if (HolidayCalendar.FR.isWorkingDay(d)) {
+                timeEntries.save(new TimeEntry(project, null, user, d, new BigDecimal(days), null));
+                logged++;
+            }
+            d = d.minusDays(1);
+        }
+    }
+
+    private void allocate(Project project, AppUser user, LocalDate start, LocalDate end, String perWeek) {
+        allocations.save(new Allocation(project, user, start, end, new BigDecimal(perWeek)));
     }
 
     private AppUser user(Organization org, String login, String name, Role role, String jobTitle) {

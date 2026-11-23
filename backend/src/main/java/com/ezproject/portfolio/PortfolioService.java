@@ -27,6 +27,7 @@ import com.ezproject.retroplanning.RetroPhaseRepository;
 import com.ezproject.retroplanning.RetroPlanDto;
 import com.ezproject.retroplanning.RetroPlanningService;
 import com.ezproject.task.TaskRepository;
+import com.ezproject.time.TimeService;
 import com.ezproject.task.TaskStatus;
 import com.ezproject.team.Team;
 import com.ezproject.team.TeamRepository;
@@ -45,11 +46,13 @@ public class PortfolioService {
     private final TeamRepository teamRepository;
     private final ProjectAccessService access;
     private final Clock clock;
+    private final TimeService timeService;
 
     public PortfolioService(ProjectRepository projectRepository, TaskRepository taskRepository,
                             RetroPhaseRepository phaseRepository, RetroPlanningService retroPlanningService,
                             AppUserRepository userRepository, TeamRepository teamRepository,
-                            ProjectAccessService access, Clock clock) {
+                            ProjectAccessService access, Clock clock, TimeService timeService) {
+        this.timeService = timeService;
         this.projectRepository = projectRepository;
         this.taskRepository = taskRepository;
         this.phaseRepository = phaseRepository;
@@ -87,7 +90,8 @@ public class PortfolioService {
                 (int) open.stream().filter(s -> s.priority() == com.ezproject.project.ProjectPriority.P1).count(),
                 openTasks,
                 open.stream().mapToLong(PortfolioDto.ProjectSummary::overdueTasks).sum(),
-                ids.isEmpty() ? 0 : taskRepository.countCompletedSince(ids, clock.instant().minus(Duration.ofDays(7))));
+                ids.isEmpty() ? 0 : taskRepository.countCompletedSince(ids, clock.instant().minus(Duration.ofDays(7))),
+                (int) open.stream().filter(s -> s.budgetPct() != null && s.budgetPct() > 100).count());
 
         return new PortfolioDto(
                 me.getRole().seesWholePortfolio() ? PortfolioDto.Scope.ORGANIZATION : PortfolioDto.Scope.MY_PROJECTS,
@@ -110,16 +114,19 @@ public class PortfolioService {
                         TaskRepository.ProjectCount::getTotal));
         Map<Long, List<RetroPhase>> phases = phaseRepository.findByProjectIdInOrderBySortOrderAsc(ids).stream()
                 .collect(Collectors.groupingBy(p -> p.getProject().getId()));
+        Map<Long, java.math.BigDecimal> consumed = timeService.consumedByProject(ids);
         return projects.stream()
                 .map(p -> summarize(p, statusCounts.getOrDefault(p.getId(), Map.of()),
-                        overdue.getOrDefault(p.getId(), 0L), phases.getOrDefault(p.getId(), List.of()), today))
+                        overdue.getOrDefault(p.getId(), 0L), phases.getOrDefault(p.getId(), List.of()), today,
+                        consumed.getOrDefault(p.getId(), java.math.BigDecimal.ZERO)))
                 .sorted(Comparator.comparing(PortfolioDto.ProjectSummary::priority)
                         .thenComparing(s -> s.endDate() == null ? LocalDate.MAX : s.endDate()))
                 .toList();
     }
 
     private PortfolioDto.ProjectSummary summarize(Project p, Map<TaskStatus, Long> byStatus, long overdueTasks,
-                                                  List<RetroPhase> phases, LocalDate today) {
+                                                  List<RetroPhase> phases, LocalDate today,
+                                                  java.math.BigDecimal consumedDays) {
         long total = byStatus.values().stream().mapToLong(Long::longValue).sum();
         long done = byStatus.getOrDefault(TaskStatus.DONE, 0L);
         int progress = total == 0 ? 0 : (int) Math.round(done * 100.0 / total);
@@ -134,10 +141,15 @@ public class PortfolioService {
         long latePhases = plan.phases().stream().filter(ph -> ph.state() == PhaseState.LATE).count();
         Long daysRemaining = p.getEndDate() == null ? null : ChronoUnit.DAYS.between(today, p.getEndDate());
 
+        Integer budgetPct = p.getBudgetDays() == null || p.getBudgetDays() == 0 ? null
+                : consumedDays.multiply(java.math.BigDecimal.valueOf(100))
+                        .divide(java.math.BigDecimal.valueOf(p.getBudgetDays()), 0, java.math.RoundingMode.HALF_UP).intValue();
+        // Dérive budgétaire : budget dépassé, ou consommation en avance de plus de 25 points sur l'avancement
+        boolean budgetDrift = budgetPct != null && (budgetPct > 100 || (total > 0 && budgetPct - progress > 25));
         // Un projet en pause n'est pas "à risque" du seul fait de ses retards : il est arbitré
         boolean atRisk = p.getStatus().isOpen() && p.getStatus() != ProjectStatus.ON_HOLD
                 && (p.getHealth() != Health.GREEN || latePhases > 0 || overdueTasks > 0 || plan.startConflict()
-                || (daysRemaining != null && daysRemaining < 0 && progress < 100));
+                || budgetDrift || (daysRemaining != null && daysRemaining < 0 && progress < 100));
 
         Map<TaskStatus, Long> counts = new EnumMap<>(TaskStatus.class);
         for (TaskStatus s : TaskStatus.values()) {
@@ -149,7 +161,7 @@ public class PortfolioService {
                 p.getStatus(), p.getStatusReason(), p.getPriority(), p.getHealth(), p.getColor(),
                 owner == null ? null : owner.getDisplayName(), team == null ? null : team.getId(),
                 team == null ? null : team.getName(), p.getStartDate(), p.getEndDate(), daysRemaining, progress,
-                total, counts, overdueTasks, next, latePhases, atRisk);
+                total, counts, overdueTasks, next, latePhases, atRisk, p.getBudgetDays(), consumedDays, budgetPct);
     }
 
     private List<PortfolioDto.Workload> workload(AppUser me, List<Long> projectIds) {

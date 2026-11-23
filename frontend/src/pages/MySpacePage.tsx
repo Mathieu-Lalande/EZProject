@@ -10,6 +10,8 @@ import { EmptyState } from '../components/ui/EmptyState';
 import { formatDate, toIsoDate } from '../lib/format';
 import { priorityLabel, taskStatusLabel } from '../lib/labels';
 import { TodoList } from '../features/todos/TodoList';
+import { Timesheet } from '../features/time/Timesheet';
+import { MyAbsences } from '../features/capacity/MyAbsences';
 
 function greeting(): string {
   const h = new Date().getHours();
@@ -63,11 +65,15 @@ export function MySpacePage() {
             ))
           )}
         </div>
-        <div>
-          <TodoList title="Mes todos personnels" />
-          <p className="mt-2 flex items-center gap-1.5 px-1 text-xs text-ink-3"><Inbox className="size-3.5" />Visibles uniquement par vous.</p>
+        <div className="space-y-6">
+          <div>
+            <TodoList title="Mes todos personnels" />
+            <p className="mt-2 flex items-center gap-1.5 px-1 text-xs text-ink-3"><Inbox className="size-3.5" />Visibles uniquement par vous.</p>
+          </div>
+          {me?.role !== 'GUEST' && <MyAbsences />}
         </div>
       </div>
+      {me?.role !== 'GUEST' && <div className="mt-6"><Timesheet /></div>}
     </div>
   );
 }

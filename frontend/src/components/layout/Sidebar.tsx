@@ -1,6 +1,6 @@
 import { NavLink } from 'react-router-dom';
 import clsx from 'clsx';
-import { LayoutDashboard, UserRound, FolderKanban, Building2, Search, Moon, Sun, LogOut, X, PauseCircle } from 'lucide-react';
+import { LayoutDashboard, UserRound, FolderKanban, Building2, Search, Moon, Sun, LogOut, X, PauseCircle, Gauge } from 'lucide-react';
 import { useLogout, useMe, useProjects } from '../../api/hooks';
 import { useTheme } from '../../lib/theme';
 import { planLabel, roleLabel } from '../../lib/labels';
@@ -24,6 +24,7 @@ export function Sidebar({ onSearch, mobileOpen, onNavigate }: SidebarProps) {
     { to: '/portfolio', label: 'Portefeuille', icon: LayoutDashboard },
     { to: '/me', label: 'Mon espace', icon: UserRound },
     { to: '/projects', label: 'Projets', icon: FolderKanban },
+    ...(me?.role !== 'GUEST' ? [{ to: '/capacity', label: 'Capacité', icon: Gauge }] : []),
     ...(me?.role !== 'GUEST' ? [{ to: '/organization', label: 'Organisation', icon: Building2 }] : []),
   ];
   const priorityRank = { P1: 0, P2: 1, P3: 2, P4: 3 } as const;

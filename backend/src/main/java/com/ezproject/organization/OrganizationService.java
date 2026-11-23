@@ -91,7 +91,8 @@ public class OrganizationService {
         Plan plan = org.getPlan();
         return new OrganizationDto(org.getId(), org.getName(), org.getSlug(), plan,
                 new OrganizationDto.Usage(projects.countByOrganizationId(org.getId()), plan.maxProjects(),
-                        userService.countInOrganization(org.getId()), plan.maxUsers(), plan.allowsCustomPermissions()));
+                        userService.countInOrganization(org.getId()), plan.maxUsers(), plan.allowsCustomPermissions()),
+                org.getHolidayCalendar());
     }
 
     private String uniqueSlug(String name) {
