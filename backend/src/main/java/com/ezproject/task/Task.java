@@ -2,11 +2,15 @@ package com.ezproject.task;
 
 import java.time.Instant;
 import java.time.LocalDate;
+import java.util.LinkedHashSet;
+import java.util.Set;
 
 import com.ezproject.project.Project;
 import com.ezproject.user.AppUser;
 
+import jakarta.persistence.CollectionTable;
 import jakarta.persistence.Column;
+import jakarta.persistence.ElementCollection;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
@@ -62,6 +66,11 @@ public class Task {
     @Column(name = "completed_at")
     private Instant completedAt;
 
+    @ElementCollection
+    @CollectionTable(name = "task_label", joinColumns = @JoinColumn(name = "task_id"))
+    @Column(name = "label")
+    private Set<String> labels = new LinkedHashSet<>();
+
     protected Task() {
         // JPA
     }
@@ -103,6 +112,22 @@ public class Task {
         this.position = newPosition;
     }
 
+    /** Étiquettes libres (8 maximum, 30 caractères), dédoublonnées sans tenir compte de la casse. */
+    public void relabel(Set<String> newLabels) {
+        Set<String> cleaned = new LinkedHashSet<>();
+        for (String l : newLabels) {
+            String t = l == null ? "" : l.trim();
+            if (!t.isEmpty() && t.length() <= 30 && cleaned.stream().noneMatch(x -> x.equalsIgnoreCase(t))) {
+                cleaned.add(t);
+            }
+        }
+        if (cleaned.size() > 8) {
+            throw new com.ezproject.common.BusinessRuleException("8 étiquettes maximum par tâche");
+        }
+        this.labels.clear();
+        this.labels.addAll(cleaned);
+    }
+
     public void estimate(Integer points) {
         this.storyPoints = points;
     }
@@ -123,4 +148,5 @@ public class Task {
     public int getPosition() { return position; }
     public Instant getCreatedAt() { return createdAt; }
     public Instant getCompletedAt() { return completedAt; }
+    public Set<String> getLabels() { return Set.copyOf(labels); }
 }

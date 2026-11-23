@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient, type QueryKey } from '@tanstack/react-query';
 import { api, request } from './client';
 import type {
+  TaskDetails,
   Copil,
   Decision,
   DecisionStatus,
@@ -618,3 +619,35 @@ export const useRoadmap = (teamId?: number) =>
     queryKey: ['roadmap', teamId ?? 'all'],
     queryFn: () => api.get<RoadmapProject[]>(teamId ? `/api/portfolio/roadmap?teamId=${teamId}` : '/api/portfolio/roadmap'),
   });
+
+// ---------- Collaboration sur les tâches ----------
+export const useTaskDetails = (taskId: number | null) =>
+  useQuery({
+    queryKey: ['task-details', taskId],
+    queryFn: () => api.get<TaskDetails>(`/api/tasks/${taskId}/details`),
+    enabled: taskId !== null,
+  });
+
+export function useCollaboration(taskId: number, projectId: number) {
+  const invalidate = useInvalidate();
+  const onSuccess = () => invalidate(['task-details', taskId], keys.tasks(projectId));
+  return {
+    comment: useMutation({ mutationFn: (body: string) => api.post(`/api/tasks/${taskId}/comments`, { body }), onSuccess }),
+    deleteComment: useMutation({ mutationFn: (id: number) => api.delete(`/api/comments/${id}`), onSuccess }),
+    addItem: useMutation({ mutationFn: (title: string) => api.post(`/api/tasks/${taskId}/checklist`, { title, done: false }), onSuccess }),
+    updateItem: useMutation({
+      mutationFn: ({ id, title, done }: { id: number; title: string; done: boolean }) => api.put(`/api/checklist/${id}`, { title, done }),
+      onSuccess,
+    }),
+    deleteItem: useMutation({ mutationFn: (id: number) => api.delete(`/api/checklist/${id}`), onSuccess }),
+    attach: useMutation({
+      mutationFn: (file: File) => {
+        const data = new FormData();
+        data.append('file', file);
+        return api.upload(`/api/tasks/${taskId}/attachments`, data);
+      },
+      onSuccess,
+    }),
+    deleteAttachment: useMutation({ mutationFn: (id: number) => api.delete(`/api/attachments/${id}`), onSuccess }),
+  };
+}

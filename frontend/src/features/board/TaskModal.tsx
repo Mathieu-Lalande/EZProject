@@ -8,6 +8,7 @@ import { Field } from '../../components/ui/Field';
 import { Button } from '../../components/ui/Button';
 import { useToast } from '../../components/ui/Toast';
 import { priorityLabel, taskStatusLabel, TASK_COLUMNS } from '../../lib/labels';
+import { TaskCollaboration } from './TaskCollaboration';
 
 interface TaskModalProps {
   projectId: number;
@@ -34,7 +35,7 @@ export function TaskModal({ projectId, task, defaultStatus = 'TODO', open, onClo
     setErrors({});
     setForm(
       task
-        ? { title: task.title, description: task.description ?? '', status: task.status, priority: task.priority, assigneeId: task.assignee?.id ?? null, storyPoints: task.storyPoints, dueDate: task.dueDate }
+        ? { title: task.title, description: task.description ?? '', status: task.status, priority: task.priority, assigneeId: task.assignee?.id ?? null, storyPoints: task.storyPoints, dueDate: task.dueDate, labels: task.labels }
         : { ...empty, status: defaultStatus },
     );
   }, [open, task, defaultStatus]);
@@ -44,7 +45,7 @@ export function TaskModal({ projectId, task, defaultStatus = 'TODO', open, onClo
   const submit = (e: FormEvent) => {
     e.preventDefault();
     save.mutate(
-      { id: task?.id, input: { ...form, description: form.description || null, dueDate: form.dueDate || null } },
+      { id: task?.id, input: { ...form, description: form.description || null, dueDate: form.dueDate || null, labels: (form.labels ?? []).map((l) => l.trim()).filter(Boolean) } },
       {
         onSuccess: () => {
           toast('success', task ? 'Tâche mise à jour' : 'Tâche créée');
@@ -105,11 +106,16 @@ export function TaskModal({ projectId, task, defaultStatus = 'TODO', open, onClo
         <Field label="Échéance">
           <input className="input" type="date" value={form.dueDate ?? ''} onChange={(e) => set('dueDate', e.target.value || null)} />
         </Field>
+        <Field label="Étiquettes (séparées par des virgules)">
+          <input className="input" placeholder="ex. Front, Sécurité" value={(form.labels ?? []).join(', ')}
+            onChange={(e) => set('labels', e.target.value.split(',').map((l) => l.trimStart()).filter((l, i, arr) => l || i === arr.length - 1))} />
+        </Field>
         <Field label="Story points" error={errors.storyPoints}>
           <input className="input" type="number" min={0} max={1000} value={form.storyPoints ?? ''} onChange={(e) => set('storyPoints', e.target.value === '' ? null : Number(e.target.value))} />
         </Field>
         </fieldset>
       </form>
+      {task && <TaskCollaboration taskId={task.id} projectId={projectId} />}
     </Modal>
   );
 }

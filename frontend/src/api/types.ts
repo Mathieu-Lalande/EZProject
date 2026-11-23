@@ -189,6 +189,16 @@ export interface Task {
   position: number;
   completedAt: string | null;
   overdue: boolean;
+  labels: string[];
+  counts: { comments: number; attachments: number; checklistDone: number; checklistTotal: number };
+}
+
+export interface TaskDetails {
+  comments: { id: number; body: string; authorId: number | null; authorName: string; createdAt: string; editedAt: string | null; editable: boolean }[];
+  checklist: { id: number; title: string; done: boolean }[];
+  attachments: { id: number; filename: string; contentType: string; sizeBytes: number; uploaderName: string | null; createdAt: string; deletable: boolean }[];
+  canComment: boolean;
+  canEdit: boolean;
 }
 
 export interface TaskInput {
@@ -199,6 +209,7 @@ export interface TaskInput {
   assigneeId?: number | null;
   storyPoints?: number | null;
   dueDate?: string | null;
+  labels?: string[];
 }
 
 export interface Todo {

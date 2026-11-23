@@ -58,6 +58,8 @@ export function KanbanBoard({ project }: { project: Project }) {
   const [editing, setEditing] = useState<{ task: Task | null; status: TaskStatus } | null>(null);
   const [search, setSearch] = useState('');
   const [mineOnly, setMineOnly] = useState(false);
+  const [label, setLabel] = useState('');
+  const allLabels = useMemo(() => [...new Set((tasks ?? []).flatMap((t) => t.labels))].sort((a, b) => a.localeCompare(b)), [tasks]);
   const [quickAdd, setQuickAdd] = useState<{ status: TaskStatus; title: string } | null>(null);
 
   useEffect(() => {
@@ -71,11 +73,11 @@ export function KanbanBoard({ project }: { project: Project }) {
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
-    if (!q && !mineOnly) return columns;
+    if (!q && !mineOnly && !label) return columns;
     return Object.fromEntries(
-      TASK_COLUMNS.map((s) => [s, columns[s].filter((t) => (!q || t.title.toLowerCase().includes(q)) && (!mineOnly || t.assignee?.id === me?.id))]),
+      TASK_COLUMNS.map((s) => [s, columns[s].filter((t) => (!q || t.title.toLowerCase().includes(q)) && (!mineOnly || t.assignee?.id === me?.id) && (!label || t.labels.includes(label)))]),
     ) as Columns;
-  }, [columns, search, mineOnly, me]);
+  }, [columns, search, mineOnly, me, label]);
 
   if (isLoading) return <Spinner />;
 
@@ -139,6 +141,12 @@ export function KanbanBoard({ project }: { project: Project }) {
         >
           Mes tâches
         </button>
+        {allLabels.length > 0 && (
+          <select className="input w-44" value={label} onChange={(e) => setLabel(e.target.value)} aria-label="Filtrer par étiquette">
+            <option value="">Toutes les étiquettes</option>
+            {allLabels.map((l) => <option key={l} value={l}>{l}</option>)}
+          </select>
+        )}
         {!canEdit && <span className="ml-auto text-xs text-ink-3">Lecture seule</span>}
         {canCreate && (
           <Button className="ml-auto" icon={<Plus className="size-4" />} onClick={() => setEditing({ task: null, status: 'TODO' })}>

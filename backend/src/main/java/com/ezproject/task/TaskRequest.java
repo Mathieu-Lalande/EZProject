@@ -1,6 +1,7 @@
 package com.ezproject.task;
 
 import java.time.LocalDate;
+import java.util.Set;
 
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
@@ -14,5 +15,6 @@ public record TaskRequest(
         Priority priority,
         Long assigneeId,
         @Min(0) @Max(1000) Integer storyPoints,
-        LocalDate dueDate) {
+        LocalDate dueDate,
+        @Size(max = 8) Set<@Size(max = 30) String> labels) {
 }

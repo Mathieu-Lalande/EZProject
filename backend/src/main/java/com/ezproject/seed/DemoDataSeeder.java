@@ -36,6 +36,10 @@ import com.ezproject.risk.DecisionStatus;
 import com.ezproject.risk.Risk;
 import com.ezproject.risk.RiskRepository;
 import com.ezproject.risk.RiskStatus;
+import com.ezproject.task.collab.ChecklistItem;
+import com.ezproject.task.collab.ChecklistItemRepository;
+import com.ezproject.task.collab.TaskComment;
+import com.ezproject.task.collab.TaskCommentRepository;
 import com.ezproject.access.ProjectMemberRepository;
 import com.ezproject.access.ProjectRole;
 import com.ezproject.access.Visibility;
@@ -102,6 +106,15 @@ class DemoDataSeeder implements ApplicationRunner {
     private RiskRepository risks;
     private DecisionRepository decisions;
     private StatusReportRepository reports;
+
+    private TaskCommentRepository comments;
+    private ChecklistItemRepository checklist;
+
+    @org.springframework.beans.factory.annotation.Autowired
+    void setCollaborationRepositories(TaskCommentRepository comments, ChecklistItemRepository checklist) {
+        this.comments = comments;
+        this.checklist = checklist;
+    }
 
     @org.springframework.beans.factory.annotation.Autowired
     void setSteeringRepositories(RiskRepository risks, DecisionRepository decisions, StatusReportRepository reports) {
@@ -243,6 +256,16 @@ class DemoDataSeeder implements ApplicationRunner {
         todos.save(new TodoItem(thomas, audit, "Réserver la salle pour les ateliers", today.plusDays(4)));
 
         poker.save(new PokerRound(portail, paiement, paiement.getTitle()));
+
+        paiement.relabel(java.util.Set.of("Back", "Paiement"));
+        int i = 0;
+        for (String step : List.of("Contrat d'intégration signé", "Bac à sable configuré", "Webhooks de confirmation", "Tests 3-D Secure")) {
+            ChecklistItem item = new ChecklistItem(paiement, step, i++);
+            item.update(step, i <= 2);
+            checklist.save(item);
+        }
+        comments.save(new TaskComment(paiement, lea, "Le client confirme la mise en production du paiement pour la V1."));
+        comments.save(new TaskComment(paiement, hugo, "Bac à sable OK, il reste les webhooks : estimation à faire au poker."));
 
         // Temps passés (jours ouvrés passés) : PORTAIL dans les clous, AUDITSI consomme plus vite qu'il n'avance
         logTime(portail, hugo, today, 30, "0.75");

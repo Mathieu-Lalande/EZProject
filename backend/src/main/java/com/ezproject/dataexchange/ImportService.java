@@ -185,7 +185,8 @@ public class ImportService {
                             ValueParser.enumValue(Priority.class, row.get("priorite", "priority"), TASK_PRIORITY, "Priorité"),
                             resolveUser(row.get("assigne", "assignee", "assignee_email", "responsable"), orgId),
                             ValueParser.integer(row.get("points", "story_points"), "Points"),
-                            ValueParser.date(row.get("echeance", "due_date", "date"), "Échéance"));
+                            ValueParser.date(row.get("echeance", "due_date", "date"), "Échéance"),
+                            labels(row.get("etiquettes", "labels", "tags")));
                     validate(request);
                     taskService.create(project.getId(), request);
                     c.created++;
@@ -249,6 +250,15 @@ public class ImportService {
             return "Droits insuffisants sur ce projet";
         }
         return "Ligne invalide";
+    }
+
+    /** Étiquettes séparées par « | », « ; » ou « , ». */
+    private static java.util.Set<String> labels(String raw) {
+        if (raw == null) {
+            return null;
+        }
+        return java.util.Arrays.stream(raw.split("[|;,]")).map(String::trim).filter(x -> !x.isEmpty())
+                .collect(java.util.stream.Collectors.toCollection(java.util.LinkedHashSet::new));
     }
 
     private static String upper(String s) {

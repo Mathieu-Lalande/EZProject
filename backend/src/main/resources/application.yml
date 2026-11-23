@@ -11,9 +11,9 @@ spring:
     enabled: true
   servlet:
     multipart:
-      # Import CSV : fichiers de taille raisonnable uniquement
-      max-file-size: 2MB
-      max-request-size: 2MB
+      # Pièces jointes (5 Mo) ; l'import CSV applique en plus sa propre limite de 2 Mo
+      max-file-size: 5MB
+      max-request-size: 6MB
 
 server:
   error:
