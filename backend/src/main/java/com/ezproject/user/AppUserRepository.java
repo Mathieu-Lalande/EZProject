@@ -15,6 +15,12 @@ public interface AppUserRepository extends JpaRepository<AppUser, Long> {
 
     List<AppUser> findByOrganizationIdOrderByDisplayNameAsc(Long organizationId);
 
+    /** Membres non supprimés (anonymisés exclus). */
+    List<AppUser> findByOrganizationIdAndDeletedAtIsNullOrderByDisplayNameAsc(Long organizationId);
+
+    /** Comptes facturables / comptés dans le quota : actifs et non supprimés. */
+    long countByOrganizationIdAndActiveTrueAndDeletedAtIsNull(Long organizationId);
+
     Optional<AppUser> findByIdAndOrganizationId(Long id, Long organizationId);
 
     Optional<AppUser> findByEmailIgnoreCaseAndOrganizationId(String email, Long organizationId);

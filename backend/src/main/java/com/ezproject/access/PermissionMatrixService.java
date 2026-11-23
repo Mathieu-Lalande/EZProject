@@ -9,6 +9,7 @@ import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.ezproject.audit.AuditService;
 import com.ezproject.common.BusinessRuleException;
 import com.ezproject.organization.Organization;
 import com.ezproject.security.CurrentUser;
@@ -20,8 +21,10 @@ public class PermissionMatrixService {
 
     private final RolePermissionRepository repository;
     private final CurrentUser currentUser;
+    private final AuditService audit;
 
-    public PermissionMatrixService(RolePermissionRepository repository, CurrentUser currentUser) {
+    public PermissionMatrixService(RolePermissionRepository repository, CurrentUser currentUser, AuditService audit) {
+        this.audit = audit;
         this.repository = repository;
         this.currentUser = currentUser;
     }
@@ -59,6 +62,7 @@ public class PermissionMatrixService {
         repository.flush();
         roles.forEach((role, perms) -> perms.forEach(p -> repository.save(new RolePermission(org.getId(), role, p))));
         org.markPermissionsCustomized(true);
+        audit.record("PERMISSIONS_UPDATED", "ORGANIZATION", org.getId(), "Matrice de permissions personnalisée");
         return matrixOf(org);
     }
 
@@ -68,6 +72,7 @@ public class PermissionMatrixService {
         requireAdmin(me);
         repository.deleteByOrganization(me.getOrganization().getId());
         me.getOrganization().markPermissionsCustomized(false);
+        audit.record("PERMISSIONS_RESET", "ORGANIZATION", me.getOrganization().getId(), "Matrice par défaut restaurée");
         return matrixOf(me.getOrganization());
     }
 

@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from 'react';
-import { UserPlus } from 'lucide-react';
-import { useChangeUserRole, useCreateUser, useMe, useUsers } from '../../api/hooks';
+import { Ban, Copy, KeyRound, MoreHorizontal, RotateCcw, Trash2, UserPlus } from 'lucide-react';
+import { Dropdown, MenuItem } from '../../components/ui/Dropdown';
+import { useChangeUserRole, useCreateUser, useMe, useUserAdmin, useUsers } from '../../api/hooks';
 import type { Role } from '../../api/types';
 import { ApiError } from '../../api/client';
 import { Avatar } from '../../components/ui/Avatar';
@@ -20,8 +21,11 @@ export function MembersTab() {
   const { data: users = [], isLoading } = useUsers();
   const { data: me } = useMe();
   const changeRole = useChangeUserRole();
+  const admin$ = useUserAdmin();
   const toast = useToast();
   const [open, setOpen] = useState(false);
+  const [temporary, setTemporary] = useState<{ name: string; password: string } | null>(null);
+  const onError = (err: unknown) => toast('error', err instanceof ApiError ? err.message : 'Action impossible');
   const admin = isAdmin(me);
   const assignable = ROLES.filter((r) => r !== 'OWNER' || me?.role === 'OWNER');
 
@@ -37,10 +41,13 @@ export function MembersTab() {
           {users.map((u) => {
             const editable = admin && u.id !== me?.id && (u.role !== 'OWNER' || me?.role === 'OWNER');
             return (
-              <li key={u.id} className="flex items-center gap-3 px-5 py-3">
+              <li key={u.id} className={`flex items-center gap-3 px-5 py-3 ${u.active ? '' : 'opacity-60'}`}>
                 <Avatar name={u.displayName} />
                 <div className="min-w-0 flex-1">
-                  <div className="truncate text-sm font-medium">{u.displayName}{u.id === me?.id && <span className="ml-1.5 text-xs text-ink-3">(vous)</span>}</div>
+                  <div className="truncate text-sm font-medium">
+                    {u.displayName}{u.id === me?.id && <span className="ml-1.5 text-xs text-ink-3">(vous)</span>}
+                    {!u.active && <Badge tone="red" className="ml-2">Désactivé</Badge>}
+                  </div>
                   <div className="truncate text-xs text-ink-3">{u.jobTitle ? `${u.jobTitle} · ` : ''}{u.email}</div>
                 </div>
                 {editable ? (
@@ -57,6 +64,32 @@ export function MembersTab() {
                   </select>
                 ) : (
                   <Badge tone={roleTone[u.role]}>{roleLabel[u.role]}</Badge>
+                )}
+                {editable && (
+                  <Dropdown align="right" trigger={({ toggle }) => (
+                    <button onClick={toggle} className="rounded-md p-1.5 text-ink-3 hover:bg-surface-2" aria-label={`Actions pour ${u.displayName}`}>
+                      <MoreHorizontal className="size-4" />
+                    </button>
+                  )}>
+                    {(close) => (
+                      <>
+                        <MenuItem onClick={() => { close(); admin$.resetPassword.mutate(u.id, { onSuccess: (r) => setTemporary({ name: u.displayName, password: r.temporaryPassword }), onError }); }}>
+                          <KeyRound className="size-4 text-ink-3" />Réinitialiser le mot de passe
+                        </MenuItem>
+                        <MenuItem onClick={() => { close(); admin$.setActive.mutate({ userId: u.id, active: !u.active }, { onSuccess: () => toast('success', u.active ? 'Compte désactivé' : 'Compte réactivé'), onError }); }}>
+                          {u.active ? <><Ban className="size-4 text-ink-3" />Désactiver le compte</> : <><RotateCcw className="size-4 text-ink-3" />Réactiver le compte</>}
+                        </MenuItem>
+                        <MenuItem onClick={() => {
+                          close();
+                          if (confirm(`Supprimer le compte de ${u.displayName} ? Ses données personnelles seront effacées (nom anonymisé dans l'historique). Action irréversible.`)) {
+                            admin$.remove.mutate(u.id, { onSuccess: () => toast('success', 'Compte supprimé'), onError });
+                          }
+                        }}>
+                          <Trash2 className="size-4 text-red-500" /><span className="text-red-600">Supprimer le compte</span>
+                        </MenuItem>
+                      </>
+                    )}
+                  </Dropdown>
                 )}
               </li>
             );
@@ -75,6 +108,20 @@ export function MembersTab() {
         </dl>
       </aside>
       <NewUserModal open={open} onClose={() => setOpen(false)} roles={assignable} />
+      <Modal open={temporary !== null} onClose={() => setTemporary(null)} title="Mot de passe provisoire"
+        footer={<Button onClick={() => setTemporary(null)}>J'ai transmis le mot de passe</Button>}>
+        <p className="mb-3 text-sm text-ink-2">
+          Transmettez ce mot de passe à <strong>{temporary?.name}</strong> par un canal sûr. Il ne sera plus affiché,
+          et devra être changé à la prochaine connexion. Les sessions en cours restent actives jusqu'à ce changement.
+        </p>
+        <div className="flex items-center gap-2 rounded-lg border border-line bg-surface-2 px-3 py-2 font-mono text-base">
+          <span className="flex-1 select-all">{temporary?.password}</span>
+          <button className="rounded p-1 text-ink-3 hover:text-ink" aria-label="Copier"
+            onClick={() => temporary && navigator.clipboard?.writeText(temporary.password).then(() => toast('success', 'Copié'))}>
+            <Copy className="size-4" />
+          </button>
+        </div>
+      </Modal>
     </div>
   );
 }

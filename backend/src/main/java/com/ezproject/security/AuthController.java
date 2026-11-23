@@ -29,6 +29,7 @@ public class AuthController {
                 new MeDto.Org(org.getId(), org.getName(), org.getSlug(), org.getPlan()),
                 memberships.findByUserId(u.getId()).stream()
                         .map(m -> new MeDto.TeamRole(m.getTeam().getId(), m.getTeam().getName(), m.getRole()))
-                        .toList());
+                        .toList(),
+                u.isMustChangePassword());
     }
 }

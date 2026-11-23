@@ -12,6 +12,7 @@ import com.ezproject.access.Permission;
 import com.ezproject.access.ProjectAccessService;
 import com.ezproject.access.ProjectRole;
 import com.ezproject.access.Visibility;
+import com.ezproject.audit.AuditService;
 import com.ezproject.common.BusinessRuleException;
 import com.ezproject.organization.Organization;
 import com.ezproject.security.CurrentUser;
@@ -32,10 +33,12 @@ public class ProjectService {
     private final UserService userService;
     private final TeamService teamService;
     private final CurrentUser currentUser;
+    private final AuditService audit;
 
     public ProjectService(ProjectRepository repository, ProjectStatusChangeRepository history,
                           ProjectAccessService access, UserService userService, TeamService teamService,
-                          CurrentUser currentUser) {
+                          CurrentUser currentUser, AuditService audit) {
+        this.audit = audit;
         this.repository = repository;
         this.history = history;
         this.access = access;
@@ -92,6 +95,7 @@ public class ProjectService {
         if (project.getStatus() == ProjectStatus.PLANNED) {
             history.save(new ProjectStatusChange(project, null, ProjectStatus.PLANNED, "Création du projet", me));
         }
+        audit.record("PROJECT_CREATED", "PROJECT", project.getId(), "Création de " + project.getCode() + " — " + project.getName());
         return ProjectDto.from(project, access.accessTo(project));
     }
 
@@ -115,6 +119,7 @@ public class ProjectService {
         if (request.status() != null) {
             record(project.changeStatus(request.status(), request.statusReason(), me));
         }
+        audit.record("PROJECT_UPDATED", "PROJECT", project.getId(), "Modification de " + project.getCode());
         return ProjectDto.from(project, access.accessTo(project));
     }
 
@@ -122,6 +127,8 @@ public class ProjectService {
     public ProjectDto changeStatus(Long id, StatusRequest request) {
         Project project = access.require(id, Permission.PROJECT_EDIT);
         record(project.changeStatus(request.status(), request.reason(), currentUser.get()));
+        audit.record("PROJECT_STATUS", "PROJECT", project.getId(), project.getCode() + " → " + request.status()
+                + (request.reason() == null || request.reason().isBlank() ? "" : " : " + request.reason()));
         return ProjectDto.from(project, access.accessTo(project));
     }
 
@@ -129,6 +136,7 @@ public class ProjectService {
     public ProjectDto changePriority(Long id, ProjectPriority priority) {
         Project project = access.require(id, Permission.PROJECT_EDIT);
         project.prioritize(priority);
+        audit.record("PROJECT_PRIORITY", "PROJECT", project.getId(), project.getCode() + " → " + priority);
         return ProjectDto.from(project, access.accessTo(project));
     }
 
@@ -136,12 +144,15 @@ public class ProjectService {
     public ProjectDto updateModules(Long id, ModulesRequest request) {
         Project project = access.require(id, Permission.PROJECT_MODULES);
         project.replaceModules(request.modules());
+        audit.record("PROJECT_MODULES", "PROJECT", project.getId(), project.getCode() + " modules : " + request.modules());
         return ProjectDto.from(project, access.accessTo(project));
     }
 
     @Transactional
     public void delete(Long id) {
-        repository.delete(access.require(id, Permission.PROJECT_DELETE));
+        Project project = access.require(id, Permission.PROJECT_DELETE);
+        audit.record("PROJECT_DELETED", "PROJECT", id, "Suppression de " + project.getCode() + " — " + project.getName());
+        repository.delete(project);
     }
 
     private void record(ProjectStatusChange change) {

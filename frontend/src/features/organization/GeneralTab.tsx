@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react';
-import { Check, Sparkles } from 'lucide-react';
+import { Check, Download, ShieldAlert, Sparkles } from 'lucide-react';
+import { useDeleteOrganization } from '../../api/hooks';
+import { Field } from '../../components/ui/Field';
 import clsx from 'clsx';
 import { useMe, useOrganization, useOrganizationMutations } from '../../api/hooks';
 import type { Plan } from '../../api/types';
@@ -79,6 +81,17 @@ export function GeneralTab() {
         </div>
         <p className="mt-3 text-xs text-ink-3">La facturation n'est pas encore branchée : le changement d'offre est immédiat et réservé au propriétaire.</p>
       </section>
+
+      {isAdmin(me) && (
+        <section className="card max-w-2xl p-5">
+          <h3 className="mb-1 text-sm font-semibold">Données de l'organisation</h3>
+          <p className="mb-4 text-xs text-ink-3">Export complet au format JSON (projets, tâches, équipes, membres…), pour archivage ou réversibilité.</p>
+          <a href="/api/organization/export" download className="inline-flex h-9 items-center gap-2 rounded-lg border border-line bg-surface px-3.5 text-sm font-medium hover:bg-surface-2">
+            <Download className="size-4" />Exporter toutes les données
+          </a>
+        </section>
+      )}
+      {me?.role === 'OWNER' && <DangerZone name={org.name} />}
     </div>
   );
 }
@@ -90,5 +103,28 @@ function Usage({ label, used, max }: { label: string; used: number; max: number 
       <div className="mb-1 flex justify-between text-sm"><span>{label}</span><span className="tabular-nums text-ink-3">{used} / {limit(max)}</span></div>
       <ProgressBar value={pct} color={pct >= 90 ? '#ef4444' : undefined} />
     </div>
+  );
+}
+
+function DangerZone({ name }: { name: string }) {
+  const remove = useDeleteOrganization();
+  const toast = useToast();
+  const [confirmation, setConfirmation] = useState('');
+  return (
+    <section className="card max-w-2xl border-red-200 p-5 dark:border-red-500/30">
+      <h3 className="mb-1 flex items-center gap-2 text-sm font-semibold text-red-600"><ShieldAlert className="size-4" />Supprimer l'organisation</h3>
+      <p className="mb-4 text-xs text-ink-3">
+        Supprime définitivement tous les projets, tâches, équipes, comptes et le journal d'audit. Exportez vos données avant. Action irréversible.
+      </p>
+      <div className="flex flex-wrap items-end gap-2">
+        <Field label={`Saisissez « ${name} » pour confirmer`} className="min-w-64 flex-1">
+          <input className="input" value={confirmation} onChange={(e) => setConfirmation(e.target.value)} />
+        </Field>
+        <Button variant="danger" disabled={confirmation !== name} loading={remove.isPending}
+          onClick={() => remove.mutate(confirmation, { onError: (e) => toast('error', e instanceof ApiError ? e.message : 'Action impossible') })}>
+          Supprimer définitivement
+        </Button>
+      </div>
+    </section>
   );
 }

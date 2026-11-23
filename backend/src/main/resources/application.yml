@@ -21,6 +21,8 @@ server:
     include-message: never
   servlet:
     session:
+      # Expiration après inactivité (SESSION_TIMEOUT, ex. 30m, 8h)
+      timeout: ${SESSION_TIMEOUT:8h}
       cookie:
         http-only: true
         same-site: lax

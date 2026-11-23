@@ -3,7 +3,7 @@ import { can, canCreateProject, isAdmin, isManager } from './permissions';
 
 const me = (role: Me['role'], teams: Me['teams'] = []): Me => ({
   id: 1, email: 'a@b.c', displayName: 'A', role, jobTitle: null,
-  organization: { id: 1, name: 'Org', slug: 'org', plan: 'TEAM' }, teams,
+  organization: { id: 1, name: 'Org', slug: 'org', plan: 'TEAM' }, teams, mustChangePassword: false,
 });
 
 describe('permissions', () => {

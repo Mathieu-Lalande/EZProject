@@ -78,6 +78,7 @@ export function LoginPage() {
           <p className="mt-6 text-center text-sm text-ink-3">
             Nouveau sur EZProject ? <Link to="/signup" className="font-medium text-brand-600 hover:underline">Créer une organisation</Link>
           </p>
+          <p className="mt-2 text-center text-xs text-ink-3"><Link to="/privacy" className="hover:underline">Confidentialité</Link></p>
           {import.meta.env.DEV && (
             <div className="mt-8 rounded-lg border border-dashed border-line p-3 text-xs text-ink-3">
               <div className="mb-1 font-medium text-ink-2">Comptes de démo (profil dev)</div>

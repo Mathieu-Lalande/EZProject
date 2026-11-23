@@ -13,6 +13,7 @@ import org.springframework.security.crypto.factory.PasswordEncoderFactories;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.HttpStatusEntryPoint;
+import org.springframework.security.web.access.intercept.AuthorizationFilter;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 import org.springframework.security.web.authentication.logout.HttpStatusReturningLogoutSuccessHandler;
 import org.springframework.security.web.csrf.CookieCsrfTokenRepository;
@@ -21,6 +22,7 @@ import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
 import com.ezproject.ratelimit.LoginThrottle;
+import com.ezproject.user.AppUserRepository;
 import com.ezproject.ratelimit.RateLimitFilter;
 import com.ezproject.ratelimit.RateLimitProperties;
 import com.ezproject.ratelimit.RateLimiter;
@@ -40,8 +42,9 @@ public class SecurityConfig {
 
     @Bean
     SecurityFilterChain securityFilterChain(HttpSecurity http, RateLimiter rateLimiter, LoginThrottle loginThrottle,
-                                            RateLimitProperties rateLimits) throws Exception {
+                                            RateLimitProperties rateLimits, AppUserRepository users) throws Exception {
         http
+            .addFilterAfter(new AccountStatusFilter(users), AuthorizationFilter.class)
             // Instancié ici (et non comme @Bean) pour qu'il ne soit pas enregistré une seconde fois comme filtre servlet
             .addFilterBefore(new RateLimitFilter(rateLimiter, loginThrottle, rateLimits),
                     UsernamePasswordAuthenticationFilter.class)

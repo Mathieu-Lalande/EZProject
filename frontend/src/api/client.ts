@@ -5,11 +5,14 @@
 export class ApiError extends Error {
   readonly status: number;
   readonly fieldErrors: Record<string, string>;
+  /** Code fonctionnel éventuel (ex. PASSWORD_CHANGE_REQUIRED, ACCOUNT_DISABLED, MFA_REQUIRED). */
+  readonly code: string | null;
 
-  constructor(status: number, message: string, fieldErrors: Record<string, string> = {}) {
+  constructor(status: number, message: string, fieldErrors: Record<string, string> = {}, code: string | null = null) {
     super(message);
     this.status = status;
     this.fieldErrors = fieldErrors;
+    this.code = code;
   }
 }
 
@@ -20,7 +23,7 @@ function readCookie(name: string): string | null {
 
 const SAFE_METHODS = new Set(['GET', 'HEAD', 'OPTIONS']);
 
-async function request<T>(method: string, url: string, body?: unknown, form?: URLSearchParams | FormData): Promise<T> {
+export async function request<T = void>(method: string, url: string, body?: unknown, form?: URLSearchParams | FormData): Promise<T> {
   const headers: Record<string, string> = {};
   if (!SAFE_METHODS.has(method)) {
     const token = readCookie('XSRF-TOKEN');
@@ -39,14 +42,16 @@ async function request<T>(method: string, url: string, body?: unknown, form?: UR
   if (!res.ok) {
     let message = res.status === 401 ? 'Session expirée' : `Erreur ${res.status}`;
     let fieldErrors: Record<string, string> = {};
+    let code: string | null = null;
     try {
-      const problem = (await res.json()) as { detail?: string; errors?: Record<string, string> };
+      const problem = (await res.json()) as { detail?: string; errors?: Record<string, string>; code?: string };
       if (problem.detail) message = problem.detail;
       if (problem.errors) fieldErrors = problem.errors;
+      if (problem.code) code = problem.code;
     } catch {
       // Réponse sans corps JSON
     }
-    throw new ApiError(res.status, message, fieldErrors);
+    throw new ApiError(res.status, message, fieldErrors, code);
   }
   if (res.status === 204 || res.headers.get('content-length') === '0') {
     return undefined as T;

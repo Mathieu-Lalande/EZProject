@@ -1,6 +1,8 @@
 import { useMutation, useQuery, useQueryClient, type QueryKey } from '@tanstack/react-query';
-import { api } from './client';
+import { api, request } from './client';
 import type {
+  AuditEntry,
+  PageDto,
   ImportReport,
   Me,
   Organization,
@@ -105,6 +107,70 @@ export function useChangeUserRole() {
   return useMutation({
     mutationFn: ({ userId, role }: { userId: number; role: Role }) => api.put<User>(`/api/users/${userId}/role`, { role }),
     onSuccess: () => invalidate(keys.users, keys.projects, keys.portfolio),
+  });
+}
+
+// ---------- Mon compte ----------
+export function useAccountMutations() {
+  const qc = useQueryClient();
+  return {
+    profile: useMutation({
+      mutationFn: (input: { displayName: string; jobTitle: string | null }) => api.put<User>('/api/account/profile', input),
+      onSuccess: () => qc.invalidateQueries({ queryKey: keys.me }),
+    }),
+    password: useMutation({
+      mutationFn: (input: { currentPassword: string; newPassword: string }) => api.put('/api/account/password', input),
+      onSuccess: () => qc.invalidateQueries({ queryKey: keys.me }),
+    }),
+  };
+}
+
+export function useDeleteAccount() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (password: string) => request('DELETE', '/api/account', { password }),
+    onSuccess: () => {
+      qc.clear();
+      void qc.invalidateQueries({ queryKey: keys.me });
+    },
+  });
+}
+
+// ---------- Administration des comptes ----------
+export function useUserAdmin() {
+  const invalidate = useInvalidate();
+  const onSuccess = () => invalidate(keys.users, keys.organization);
+  return {
+    resetPassword: useMutation({
+      mutationFn: (userId: number) => api.post<{ temporaryPassword: string }>(`/api/users/${userId}/reset-password`),
+    }),
+    setActive: useMutation({
+      mutationFn: ({ userId, active }: { userId: number; active: boolean }) =>
+        api.put<User>(`/api/users/${userId}/active`, { active }),
+      onSuccess,
+    }),
+    remove: useMutation({ mutationFn: (userId: number) => api.delete(`/api/users/${userId}`), onSuccess }),
+  };
+}
+
+export const useAudit = (params: { page: number; q: string; entityType: string }) =>
+  useQuery({
+    queryKey: ['audit', params],
+    queryFn: () =>
+      api.get<PageDto<AuditEntry>>(
+        `/api/organization/audit?page=${params.page}&size=25&q=${encodeURIComponent(params.q)}&entityType=${params.entityType}`,
+      ),
+    placeholderData: (previous) => previous,
+  });
+
+export function useDeleteOrganization() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (confirmationName: string) => request('DELETE', '/api/organization', { confirmationName }),
+    onSuccess: () => {
+      qc.clear();
+      void qc.invalidateQueries({ queryKey: keys.me });
+    },
   });
 }
 

@@ -23,6 +23,8 @@ class AppUserDetailsService implements UserDetailsService {
                 .map(u -> User.withUsername(u.getEmail())
                         .password(u.getPasswordHash())
                         .roles(u.getRole().name())
+                        // Compte désactivé ou supprimé : connexion refusée (DisabledException -> 401)
+                        .disabled(!u.isActive() || u.isDeleted())
                         .build())
                 .orElseThrow(() -> new UsernameNotFoundException("Identifiants invalides"));
     }

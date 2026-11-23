@@ -47,6 +47,15 @@ public class AppUser {
     @Column(name = "created_at", nullable = false)
     private Instant createdAt;
 
+    @Column(nullable = false)
+    private boolean active = true;
+
+    @Column(name = "must_change_password", nullable = false)
+    private boolean mustChangePassword;
+
+    @Column(name = "deleted_at")
+    private Instant deletedAt;
+
     protected AppUser() {
         // JPA
     }
@@ -66,6 +75,45 @@ public class AppUser {
         this.role = newRole;
     }
 
+    public void updateProfile(String newDisplayName, String newJobTitle) {
+        this.displayName = newDisplayName;
+        this.jobTitle = newJobTitle;
+    }
+
+    /** Mot de passe choisi par l'utilisateur lui-même. */
+    public void changePassword(String newHash) {
+        this.passwordHash = newHash;
+        this.mustChangePassword = false;
+    }
+
+    /** Mot de passe provisoire défini par un administrateur : à changer à la prochaine connexion. */
+    public void resetPassword(String temporaryHash) {
+        this.passwordHash = temporaryHash;
+        this.mustChangePassword = true;
+    }
+
+    public void setActive(boolean value) {
+        this.active = value;
+    }
+
+    /**
+     * Droit à l'effacement (RGPD) : les données personnelles sont supprimées, l'historique des projets reste
+     * cohérent (les tâches et journaux pointent vers un « Utilisateur supprimé »).
+     */
+    public void anonymize(String unusablePasswordHash) {
+        this.email = "supprime-" + id + "@deleted.invalid";
+        this.displayName = "Utilisateur supprimé";
+        this.jobTitle = null;
+        this.passwordHash = unusablePasswordHash;
+        this.active = false;
+        this.mustChangePassword = false;
+        this.deletedAt = Instant.now();
+    }
+
+    public boolean isDeleted() {
+        return deletedAt != null;
+    }
+
     public boolean belongsTo(Organization org) {
         return organization.getId().equals(org.getId());
     }
@@ -78,4 +126,7 @@ public class AppUser {
     public Role getRole() { return role; }
     public String getJobTitle() { return jobTitle; }
     public Instant getCreatedAt() { return createdAt; }
+    public boolean isActive() { return active; }
+    public boolean isMustChangePassword() { return mustChangePassword; }
+    public Instant getDeletedAt() { return deletedAt; }
 }

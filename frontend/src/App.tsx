@@ -8,6 +8,8 @@ import { ProjectsPage } from './pages/ProjectsPage';
 import { ProjectPage } from './pages/ProjectPage';
 import { OrganizationPage } from './pages/OrganizationPage';
 import { SignupPage } from './auth/SignupPage';
+import { AccountPage } from './pages/AccountPage';
+import { PrivacyPage } from './pages/PrivacyPage';
 
 function Home() {
   return <Navigate to={useIsManager() ? '/portfolio' : '/me'} replace />;
@@ -18,10 +20,12 @@ export function App() {
     <Routes>
       <Route path="/login" element={<LoginPage />} />
       <Route path="/signup" element={<SignupPage />} />
+      <Route path="/privacy" element={<PrivacyPage />} />
       <Route element={<RequireAuth><AppLayout /></RequireAuth>}>
         <Route index element={<Home />} />
         <Route path="portfolio" element={<PortfolioPage />} />
         <Route path="me" element={<MySpacePage />} />
+        <Route path="account" element={<AccountPage />} />
         <Route path="projects" element={<ProjectsPage />} />
         <Route path="projects/:id/:tab?" element={<ProjectPage />} />
         <Route path="organization/:tab?" element={<OrganizationPage />} />

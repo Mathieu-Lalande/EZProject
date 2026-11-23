@@ -62,6 +62,9 @@ export function SignupPage() {
         <p className="mt-6 text-center text-sm text-ink-3">
           Déjà un compte ? <Link to="/login" className="font-medium text-brand-600 hover:underline">Se connecter</Link>
         </p>
+        <p className="mt-2 text-center text-xs text-ink-3">
+          En créant un compte, vous acceptez la <Link to="/privacy" className="underline">politique de confidentialité</Link>.
+        </p>
       </form>
     </div>
   );

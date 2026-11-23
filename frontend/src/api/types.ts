@@ -35,11 +35,31 @@ export interface User {
   displayName: string;
   role: Role;
   jobTitle: string | null;
+  active: boolean;
 }
 
-export interface Me extends User {
+export interface PageDto<T> {
+  content: T[];
+  page: number;
+  size: number;
+  totalElements: number;
+  totalPages: number;
+}
+
+export interface AuditEntry {
+  id: number;
+  actorName: string | null;
+  action: string;
+  entityType: string | null;
+  entityId: number | null;
+  summary: string | null;
+  createdAt: string;
+}
+
+export interface Me extends Omit<User, 'active'> {
   organization: { id: number; name: string; slug: string; plan: Plan };
   teams: { teamId: number; teamName: string; role: ProjectRole }[];
+  mustChangePassword: boolean;
 }
 
 export interface Project {

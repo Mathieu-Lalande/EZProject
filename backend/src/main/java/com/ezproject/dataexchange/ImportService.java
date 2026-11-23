@@ -15,6 +15,7 @@ import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
 
 import com.ezproject.access.Visibility;
+import com.ezproject.audit.AuditService;
 import com.ezproject.common.BusinessRuleException;
 import com.ezproject.common.NotFoundException;
 import com.ezproject.project.Health;
@@ -84,10 +85,13 @@ public class ImportService {
     private final CurrentUser currentUser;
     private final Validator validator;
     private final TransactionTemplate transaction;
+    private final AuditService audit;
 
     public ImportService(ProjectService projectService, ProjectRepository projectRepository, TaskService taskService,
                          TeamService teamService, TeamRepository teamRepository, UserService userService,
-                         CurrentUser currentUser, Validator validator, PlatformTransactionManager txManager) {
+                         CurrentUser currentUser, Validator validator, PlatformTransactionManager txManager,
+                         AuditService audit) {
+        this.audit = audit;
         this.projectService = projectService;
         this.projectRepository = projectRepository;
         this.taskService = taskService;
@@ -199,6 +203,9 @@ public class ImportService {
         boolean applied = !dryRun && c.errors.isEmpty();
         if (!applied) {
             tx.setRollbackOnly();
+        } else {
+            audit.record("IMPORT", "ORGANIZATION", null, "Import CSV : " + c.created + " création(s), " + c.updated
+                    + " mise(s) à jour, " + c.teamsCreated + " équipe(s)");
         }
         return new ImportReport(dryRun, applied, rows, c.created, c.updated, c.teamsCreated, List.copyOf(c.errors),
                 c.preview.stream().limit(50).toList());

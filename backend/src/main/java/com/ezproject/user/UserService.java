@@ -8,6 +8,7 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.ezproject.audit.AuditService;
 import com.ezproject.common.BusinessRuleException;
 import com.ezproject.common.NotFoundException;
 import com.ezproject.organization.Organization;
@@ -22,8 +23,10 @@ public class UserService {
 
     private final AppUserRepository repository;
     private final PasswordEncoder passwordEncoder;
+    private final AuditService audit;
 
-    public UserService(AppUserRepository repository, PasswordEncoder passwordEncoder) {
+    public UserService(AppUserRepository repository, PasswordEncoder passwordEncoder, AuditService audit) {
+        this.audit = audit;
         this.repository = repository;
         this.passwordEncoder = passwordEncoder;
     }
@@ -37,8 +40,8 @@ public class UserService {
     }
 
     public List<UserDto> findAll() {
-        return repository.findByOrganizationIdOrderByDisplayNameAsc(me().getOrganization().getId()).stream()
-                .map(UserDto::from).toList();
+        return repository.findByOrganizationIdAndDeletedAtIsNullOrderByDisplayNameAsc(me().getOrganization().getId())
+                .stream().map(UserDto::from).toList();
     }
 
     /** Utilisateur de l'organisation donnée ; 404 pour un utilisateur d'un autre locataire. */
@@ -51,8 +54,9 @@ public class UserService {
         return repository.findByEmailIgnoreCaseAndOrganizationId(email, organizationId);
     }
 
+    /** Utilisateurs comptés dans le quota de l'offre : actifs et non supprimés. */
     public long countInOrganization(Long organizationId) {
-        return repository.countByOrganizationId(organizationId);
+        return repository.countByOrganizationIdAndActiveTrueAndDeletedAtIsNull(organizationId);
     }
 
     @Transactional
@@ -63,11 +67,13 @@ public class UserService {
             throw new AccessDeniedException("Seul un propriétaire peut nommer un autre propriétaire");
         }
         Organization org = me.getOrganization();
-        if (!org.getPlan().allowsMoreUsers(repository.countByOrganizationId(org.getId()))) {
+        if (!org.getPlan().allowsMoreUsers(countInOrganization(org.getId()))) {
             throw new BusinessRuleException("Limite d'utilisateurs atteinte pour l'offre " + org.getPlan());
         }
-        return UserDto.from(register(org, request.email(), request.displayName(), request.password(), request.role(),
-                request.jobTitle()));
+        AppUser created = register(org, request.email(), request.displayName(), request.password(), request.role(),
+                request.jobTitle());
+        audit.record("USER_CREATED", "USER", created.getId(), "Création du compte " + created.getEmail() + " (" + created.getRole() + ")");
+        return UserDto.from(created);
     }
 
     /** Création brute, utilisée aussi par l'inscription self-service et l'initialisation. */
@@ -77,6 +83,7 @@ public class UserService {
         if (repository.existsByEmailIgnoreCase(email)) {
             throw new BusinessRuleException("Un compte existe déjà avec cet email");
         }
+        com.ezproject.account.PasswordPolicy.check(rawPassword, email);
         return repository.save(new AppUser(org, email, displayName, passwordEncoder.encode(rawPassword), role, jobTitle));
     }
 
@@ -92,6 +99,7 @@ public class UserService {
         if (touchesOwner && me.getRole() != Role.OWNER) {
             throw new AccessDeniedException("Seul un propriétaire peut gérer le rôle propriétaire");
         }
+        audit.record("USER_ROLE", "USER", target.getId(), target.getDisplayName() + " : " + target.getRole() + " → " + newRole);
         target.changeRole(newRole);
         return UserDto.from(target);
     }

@@ -116,11 +116,13 @@ export function Sidebar({ onSearch, mobileOpen, onNavigate }: SidebarProps) {
 
         {me && (
           <div className="flex items-center gap-2.5 border-t border-line p-3">
-            <Avatar name={me.displayName} />
-            <div className="min-w-0 flex-1">
-              <div className="truncate text-sm font-medium">{me.displayName}</div>
-              <div className="truncate text-xs text-ink-3">{me.jobTitle ?? roleLabel[me.role]}</div>
-            </div>
+            <NavLink to="/account" onClick={onNavigate} className="flex min-w-0 flex-1 items-center gap-2.5 rounded-lg p-1 -m-1 hover:bg-surface-2" title="Mon compte">
+              <Avatar name={me.displayName} />
+              <div className="min-w-0 flex-1">
+                <div className="truncate text-sm font-medium">{me.displayName}</div>
+                <div className="truncate text-xs text-ink-3">{me.jobTitle ?? roleLabel[me.role]}</div>
+              </div>
+            </NavLink>
             <button onClick={toggleTheme} className="rounded-md p-1.5 text-ink-3 hover:bg-surface-2 hover:text-ink" aria-label="Changer de thème">
               {theme === 'dark' ? <Sun className="size-4" /> : <Moon className="size-4" />}
             </button>
