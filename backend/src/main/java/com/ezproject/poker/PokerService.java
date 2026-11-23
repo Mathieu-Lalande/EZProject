@@ -28,6 +28,19 @@ public class PokerService {
     private final ProjectAccessService access;
     private final TaskService taskService;
     private final CurrentUser currentUser;
+    private org.springframework.context.ApplicationEventPublisher events;
+
+    @org.springframework.beans.factory.annotation.Autowired
+    void setEvents(org.springframework.context.ApplicationEventPublisher events) {
+        this.events = events;
+    }
+
+    private RoundDto publish(PokerRound round, RoundDto dto) {
+        if (events != null) {
+            events.publishEvent(new PokerChangedEvent(round.getProject().getId(), round.getId()));
+        }
+        return dto;
+    }
 
     public PokerService(PokerRoundRepository repository, ProjectAccessService access, TaskService taskService,
                         CurrentUser currentUser) {
@@ -62,7 +75,8 @@ public class PokerService {
         if (!StringUtils.hasText(title)) {
             throw new BusinessRuleException("Indiquez une story ou une tâche à estimer");
         }
-        return toDto(repository.save(new PokerRound(project, task, title)), currentUser.get());
+        PokerRound saved = repository.save(new PokerRound(project, task, title));
+        return publish(saved, toDto(saved, currentUser.get()));
     }
 
     @Transactional
@@ -70,14 +84,15 @@ public class PokerService {
         PokerRound round = getWith(roundId, Permission.POKER_VOTE);
         AppUser me = currentUser.get();
         round.vote(me, request.card());
-        return toDto(round, me);
+        repository.flush();
+        return publish(round, toDto(round, me));
     }
 
     @Transactional
     public RoundDto reveal(Long roundId) {
         PokerRound round = getWith(roundId, Permission.POKER_FACILITATE);
         round.reveal();
-        return toDto(round, currentUser.get());
+        return publish(round, toDto(round, currentUser.get()));
     }
 
     @Transactional
@@ -85,7 +100,7 @@ public class PokerService {
         PokerRound round = getWith(roundId, Permission.POKER_FACILITATE);
         round.restart();
         repository.flush();
-        return toDto(round, currentUser.get());
+        return publish(round, toDto(round, currentUser.get()));
     }
 
     /** Clôt le tour et reporte l'estimation sur la tâche liée, le cas échéant. */
@@ -97,7 +112,7 @@ public class PokerService {
         if (round.getTask() != null && points.isPresent()) {
             taskService.estimate(round.getTask().getId(), points.getAsInt());
         }
-        return toDto(round, currentUser.get());
+        return publish(round, toDto(round, currentUser.get()));
     }
 
     private PokerRound getWith(Long id, Permission permission) {

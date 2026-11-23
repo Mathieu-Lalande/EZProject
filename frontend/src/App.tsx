@@ -1,18 +1,22 @@
+import { lazy, Suspense } from 'react';
 import { Navigate, Route, Routes } from 'react-router-dom';
+import { Spinner } from './components/ui/Spinner';
 import { RequireAuth, useIsManager } from './auth/RequireAuth';
 import { LoginPage } from './auth/LoginPage';
 import { AppLayout } from './components/layout/AppLayout';
-import { PortfolioPage } from './pages/PortfolioPage';
-import { MySpacePage } from './pages/MySpacePage';
-import { ProjectsPage } from './pages/ProjectsPage';
-import { ProjectPage } from './pages/ProjectPage';
-import { OrganizationPage } from './pages/OrganizationPage';
-import { SignupPage } from './auth/SignupPage';
-import { AccountPage } from './pages/AccountPage';
-import { PrivacyPage } from './pages/PrivacyPage';
-import { CapacityPage } from './pages/CapacityPage';
-import { CopilPage } from './pages/CopilPage';
-import { RoadmapPage } from './pages/RoadmapPage';
+
+// Découpage du code : chaque page est chargée à la demande (bundle initial plus léger)
+const PortfolioPage = lazy(() => import('./pages/PortfolioPage').then((m) => ({ default: m.PortfolioPage })));
+const MySpacePage = lazy(() => import('./pages/MySpacePage').then((m) => ({ default: m.MySpacePage })));
+const ProjectsPage = lazy(() => import('./pages/ProjectsPage').then((m) => ({ default: m.ProjectsPage })));
+const ProjectPage = lazy(() => import('./pages/ProjectPage').then((m) => ({ default: m.ProjectPage })));
+const OrganizationPage = lazy(() => import('./pages/OrganizationPage').then((m) => ({ default: m.OrganizationPage })));
+const SignupPage = lazy(() => import('./auth/SignupPage').then((m) => ({ default: m.SignupPage })));
+const AccountPage = lazy(() => import('./pages/AccountPage').then((m) => ({ default: m.AccountPage })));
+const PrivacyPage = lazy(() => import('./pages/PrivacyPage').then((m) => ({ default: m.PrivacyPage })));
+const CapacityPage = lazy(() => import('./pages/CapacityPage').then((m) => ({ default: m.CapacityPage })));
+const CopilPage = lazy(() => import('./pages/CopilPage').then((m) => ({ default: m.CopilPage })));
+const RoadmapPage = lazy(() => import('./pages/RoadmapPage').then((m) => ({ default: m.RoadmapPage })));
 
 function Home() {
   return <Navigate to={useIsManager() ? '/portfolio' : '/me'} replace />;
@@ -20,6 +24,7 @@ function Home() {
 
 export function App() {
   return (
+    <Suspense fallback={<Spinner />}>
     <Routes>
       <Route path="/login" element={<LoginPage />} />
       <Route path="/signup" element={<SignupPage />} />
@@ -39,5 +44,6 @@ export function App() {
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
+    </Suspense>
   );
 }

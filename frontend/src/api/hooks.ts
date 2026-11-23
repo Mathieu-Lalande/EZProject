@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react';
 import { useMutation, useQuery, useQueryClient, type QueryKey } from '@tanstack/react-query';
 import { api, request } from './client';
 import type {
@@ -443,13 +444,29 @@ export function useRetroMutations(projectId: number) {
 export const usePokerDeck = () =>
   useQuery({ queryKey: ['poker', 'deck'], queryFn: () => api.get<string[]>('/api/poker/deck'), staleTime: Infinity });
 
-/** Rafraîchi toutes les 2 s pour voir les votes des autres participants en quasi temps réel. */
-export const usePokerRounds = (projectId: number) =>
-  useQuery({
+/**
+ * Tours de poker en temps réel : un flux SSE signale chaque changement (vote, révélation…) et déclenche
+ * un rechargement ; un rafraîchissement lent (15 s) sert de filet si le flux est coupé.
+ */
+export function usePokerRounds(projectId: number) {
+  const qc = useQueryClient();
+  const [live, setLive] = useState(false);
+  useEffect(() => {
+    if (typeof EventSource === 'undefined') return;
+    const source = new EventSource(`/api/projects/${projectId}/poker/stream`);
+    const refresh = () => void qc.invalidateQueries({ queryKey: keys.poker(projectId) });
+    source.addEventListener('ready', () => setLive(true));
+    source.addEventListener('poker', refresh);
+    source.onerror = () => setLive(false);
+    return () => source.close();
+  }, [projectId, qc]);
+  const query = useQuery({
     queryKey: keys.poker(projectId),
     queryFn: () => api.get<PokerRound[]>(`/api/projects/${projectId}/poker/rounds`),
-    refetchInterval: 2000,
+    refetchInterval: live ? 15_000 : 3_000,
   });
+  return { ...query, live };
+}
 
 export function usePokerMutations(projectId: number) {
   const invalidate = useInvalidate();

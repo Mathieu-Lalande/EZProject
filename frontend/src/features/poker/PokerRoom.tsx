@@ -14,7 +14,7 @@ export function PokerRoom({ project }: { project: Project }) {
   const projectId = project.id;
   const canVote = can(project, 'POKER_VOTE');
   const canFacilitate = can(project, 'POKER_FACILITATE');
-  const { data: rounds = [], isLoading } = usePokerRounds(projectId);
+  const { data: rounds = [], isLoading, live } = usePokerRounds(projectId);
   const { data: deck = [] } = usePokerDeck();
   const { data: tasks = [] } = useTasks(projectId);
   const m = usePokerMutations(projectId);
@@ -46,7 +46,10 @@ export function PokerRoom({ project }: { project: Project }) {
           <div className="card p-6">
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div>
-                <div className="text-xs text-ink-3">Story en cours d'estimation</div>
+                <div className="flex items-center gap-1.5 text-xs text-ink-3">
+                  Story en cours d'estimation
+                  <span className={`size-1.5 rounded-full ${live ? 'bg-emerald-500' : 'bg-zinc-400'}`} title={live ? 'Temps réel actif' : 'Actualisation périodique'} />
+                </div>
                 <h3 className="text-lg font-semibold">{current.storyTitle}</h3>
               </div>
               <Badge tone={current.status === 'VOTING' ? 'brand' : current.status === 'REVEALED' ? 'amber' : 'green'}>
