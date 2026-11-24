@@ -55,7 +55,7 @@ jobs:
         working-directory: frontend
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: '22'
           cache: npm
@@ -95,7 +95,7 @@ jobs:
       - name: Installer Maven (wrapper)
         working-directory: backend
         run: ./mvnw -B -q -v || (sleep 15 && ./mvnw -B -q -v)
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: '22'
           cache: npm
