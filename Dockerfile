@@ -2,7 +2,7 @@
 # docker build -t ezproject .   (ou : docker compose up --build)
 
 # 1) Interface
-FROM node:22-alpine AS frontend
+FROM node:26-alpine AS frontend
 WORKDIR /build/frontend
 COPY frontend/package.json frontend/package-lock.json ./
 RUN npm ci
