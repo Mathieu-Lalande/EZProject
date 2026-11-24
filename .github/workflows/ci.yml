@@ -1,8 +1,17 @@
 name: CI
 
+# Économie de minutes : une seule exécution par PR (pas de doublon push + pull_request),
+# rien pour la documentation seule, et une exécution remplacée annule la précédente.
 on:
   push:
+    branches: [main]
+    paths-ignore: ['**.md', 'docs/**']
   pull_request:
+    paths-ignore: ['**.md', 'docs/**']
+
+concurrency:
+  group: ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 permissions:
   contents: read
