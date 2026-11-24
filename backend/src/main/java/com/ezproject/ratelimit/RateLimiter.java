@@ -1,16 +1,13 @@
 package com.ezproject.ratelimit;
 
-import java.time.Duration;
 import java.util.function.LongSupplier;
 
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
-import com.github.benmanes.caffeine.cache.Cache;
-import com.github.benmanes.caffeine.cache.Caffeine;
-
 /**
- * Limiteur en mémoire, borné (Caffeine : taille maximale + expiration) pour résister à un grand nombre de clés.
- * Une instance par nœud : en déploiement multi-instances, remplacer par un stockage partagé (ex. Redis).
+ * Limiteur à seaux à jetons. Le stockage est en mémoire par défaut (une instance) ou dans Redis
+ * (app.redis.enabled=true) pour partager les compteurs entre plusieurs instances.
  */
 @Component
 public class RateLimiter {
@@ -20,39 +17,28 @@ public class RateLimiter {
         static final Decision OK = new Decision(true, 0);
     }
 
-    private final Cache<String, TokenBucket> buckets = Caffeine.newBuilder()
-            .maximumSize(100_000)
-            .expireAfterAccess(Duration.ofHours(2))
-            .build();
+    private final RateLimitStore store;
 
-    private final LongSupplier clock;
-
-    public RateLimiter() {
-        this(System::nanoTime);
+    @Autowired
+    public RateLimiter(RateLimitStore store) {
+        this.store = store;
     }
 
+    /** Pour les tests : stockage en mémoire avec horloge simulée. */
     RateLimiter(LongSupplier nanoClock) {
-        this.clock = nanoClock;
+        this(new InMemoryRateLimitStore(nanoClock));
     }
 
     public Decision tryConsume(String policy, RateLimitProperties.Limit limit, String key) {
-        long now = clock.getAsLong();
-        TokenBucket bucket = bucket(policy, limit, key, now);
-        return bucket.tryConsume(now) ? Decision.OK : new Decision(false, bucket.secondsUntilAvailable(now));
+        return store.tryConsume(policy + ':' + key, limit);
     }
 
     /** Consulte sans consommer : la clé a-t-elle épuisé son quota ? */
     public Decision peek(String policy, RateLimitProperties.Limit limit, String key) {
-        TokenBucket bucket = buckets.getIfPresent(policy + ':' + key);
-        long now = clock.getAsLong();
-        return bucket == null || !bucket.isEmpty(now) ? Decision.OK : new Decision(false, bucket.secondsUntilAvailable(now));
+        return store.peek(policy + ':' + key, limit);
     }
 
     public void reset(String policy, String key) {
-        buckets.invalidate(policy + ':' + key);
-    }
-
-    private TokenBucket bucket(String policy, RateLimitProperties.Limit limit, String key, long now) {
-        return buckets.get(policy + ':' + key, k -> new TokenBucket(limit.capacity(), limit.window(), now));
+        store.reset(policy + ':' + key);
     }
 }

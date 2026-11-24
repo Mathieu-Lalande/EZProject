@@ -9,8 +9,6 @@ import java.util.concurrent.CopyOnWriteArraySet;
 import org.springframework.http.MediaType;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
-import org.springframework.transaction.event.TransactionPhase;
-import org.springframework.transaction.event.TransactionalEventListener;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 import com.ezproject.common.BusinessRuleException;
@@ -19,7 +17,8 @@ import com.ezproject.common.BusinessRuleException;
  * Diffusion temps réel (Server-Sent Events) des changements de planning poker.
  * Le flux ne transporte qu'un signal « tour X modifié » : chaque client relit l'état via l'API REST,
  * avec ses propres droits — aucune carte non révélée ne transite par le flux.
- * En mémoire, par instance : en déploiement multi-instances, relayer les événements (ex. Redis Pub/Sub).
+ * Les connexions sont locales à l'instance ; en multi-instances, {@link PokerEventRelay} diffuse les événements
+ * à toutes les instances (Redis Pub/Sub).
  */
 @Component
 public class PokerEventHub {
@@ -44,8 +43,8 @@ public class PokerEventHub {
         return emitter;
     }
 
-    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
-    public void onChange(PokerChangedEvent event) {
+    /** Diffuse l'événement aux clients connectés à cette instance. */
+    public void broadcast(PokerChangedEvent event) {
         Set<SseEmitter> set = emitters.get(event.projectId());
         if (set != null) {
             set.forEach(e -> send(e, "poker", "{\"roundId\":" + event.roundId() + "}"));

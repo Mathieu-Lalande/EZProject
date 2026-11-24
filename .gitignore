@@ -16,3 +16,7 @@ frontend/dist/
 .env
 .env.*
 !.env.example
+
+# Tests de bout en bout
+e2e/node_modules/
+backups/

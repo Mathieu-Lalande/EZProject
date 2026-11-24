@@ -39,11 +39,18 @@ management:
     health:
       probes:
         enabled: true
+  health:
+    redis:
+      # Vérifié seulement si Redis est utilisé
+      enabled: ${REDIS_ENABLED:false}
   metrics:
     tags:
       application: ezproject
 
 app:
+  redis:
+    # true = compteurs anti-abus et événements temps réel partagés entre instances (SPRING_DATA_REDIS_HOST/PORT/PASSWORD)
+    enabled: ${REDIS_ENABLED:false}
   rls:
     # Row-Level Security PostgreSQL (sans effet sur H2)
     enabled: ${RLS_ENABLED:true}
