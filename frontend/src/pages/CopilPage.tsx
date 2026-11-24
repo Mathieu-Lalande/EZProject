@@ -81,7 +81,7 @@ export function CopilPage() {
         <Section title="Principaux risques">
           {data.risks.length === 0 ? <p className="text-sm text-ink-3">Aucun risque actif.</p> : (
             <table className="w-full text-sm">
-              <thead><tr className="text-left text-xs text-ink-3"><th className="py-1 font-medium">Risque</th><th className="py-1 font-medium">Criticité</th><th className="py-1 font-medium">Plan d'action</th><th className="py-1 font-medium">Statut</th></tr></thead>
+              <thead><tr className="text-left text-xs text-ink-3"><th className="py-1 pr-3 font-medium">Risque</th><th className="py-1 pr-3 font-medium">Criticité</th><th className="py-1 pr-3 font-medium">Plan d&apos;action</th><th className="py-1 font-medium">Statut</th></tr></thead>
               <tbody>
                 {data.risks.map((x) => (
                   <tr key={x.id} className="border-t border-line align-top">

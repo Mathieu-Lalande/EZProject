@@ -1,9 +1,9 @@
-#!/usr/bin/env bash
+#!/bin/sh
 # Sauvegarde PostgreSQL d'EZProject (format custom, compressé), avec rétention.
 #   PGHOST PGPORT PGUSER PGPASSWORD PGDATABASE : connexion (variables standard libpq)
 #   BACKUP_DIR (défaut ./backups), BACKUP_RETENTION_DAYS (défaut 14)
 # Exemple cron (tous les jours à 2h) : 0 2 * * * /opt/ezproject/scripts/backup.sh >> /var/log/ezproject-backup.log 2>&1
-set -euo pipefail
+set -eu
 
 BACKUP_DIR="${BACKUP_DIR:-./backups}"
 RETENTION_DAYS="${BACKUP_RETENTION_DAYS:-14}"

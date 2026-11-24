@@ -143,7 +143,10 @@ public class CapacityService {
     private List<AppUser> visiblePeople(AppUser me, Long teamId) {
         Long orgId = me.getOrganization().getId();
         List<AppUser> all = users.findByOrganizationIdAndDeletedAtIsNullOrderByDisplayNameAsc(orgId).stream()
-                .filter(AppUser::isActive).toList();
+                .filter(AppUser::isActive)
+                // Les invités (clients, partenaires) ne font pas partie de la capacité des équipes
+                .filter(u -> u.getRole() != com.ezproject.user.Role.GUEST)
+                .toList();
         Set<Long> teamFilter = teamId == null ? null : memberships.findByTeamIdIn(List.of(teamId)).stream()
                 .map(m -> m.getUser().getId()).collect(Collectors.toSet());
         Set<Long> allowed;

@@ -81,7 +81,7 @@ export function TimeTab({ project }: { project: Project }) {
           {months.length === 0 ? <p className="text-sm text-ink-3">Aucun temps saisi.</p> : (
             <div className="flex h-36 items-end gap-0.5">
               {months.map((m) => (
-                <div key={m.month} className="group flex h-full flex-1 flex-col justify-end" title={`${monthLabel(m.month)} : ${num.format(m.days)} j`}>
+                <div key={m.month} className="group flex h-full max-w-12 flex-1 flex-col justify-end" title={`${monthLabel(m.month)} : ${num.format(m.days)} j`}>
                   <span className="mb-1 text-center text-[10px] text-ink-3 opacity-0 tabular-nums group-hover:opacity-100">{num.format(m.days)}</span>
                   <div className="rounded-t-[4px] bg-brand-500 transition group-hover:bg-brand-600" style={{ height: `${Math.max(2, (m.days / maxMonth) * 100)}%` }} />
                   <span className="mt-1 truncate text-center text-[10px] text-ink-3">{monthLabel(m.month)}</span>
@@ -173,7 +173,7 @@ function Entries({ project }: { project: Project }) {
               <tr key={e.id} className="group border-b border-line last:border-0">
                 <td className="px-5 py-2.5 whitespace-nowrap text-ink-3 tabular-nums">{formatDate(e.date, true)}</td>
                 <td className="px-3 py-2.5 whitespace-nowrap">{e.userName}</td>
-                <td className="px-3 py-2.5 font-semibold tabular-nums">{num.format(e.days)} j</td>
+                <td className="px-3 py-2.5 font-semibold whitespace-nowrap tabular-nums">{num.format(e.days)} j</td>
                 <td className="w-full px-3 py-2.5 text-ink-2">{[e.taskTitle, e.comment].filter(Boolean).join(' — ')}</td>
                 <td className="px-5 py-2.5">
                   {e.editable && (

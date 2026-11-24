@@ -116,7 +116,8 @@ class TimeAndCapacityIntegrationTest {
     void capacityScopeAndOverload() throws Exception {
         // Manager : tout le monde ; Hugo est surchargé cette semaine (5,5 j affectés pour 5)
         mvc.perform(as("lea", get("/api/capacity").param("weeks", "2")))
-                .andExpect(jsonPath("$.people[?(@.displayName=='Hugo Bernard')].weeks[0].loadPct").value(hasItem(greaterThan(100))));
+                .andExpect(jsonPath("$.people[?(@.displayName=='Hugo Bernard')].weeks[0].loadPct").value(hasItem(greaterThan(100))))
+                .andExpect(jsonPath("$.people[*].displayName").value(not(hasItem("Julie Moreau"))));
         // Responsable d'équipe : son équipe uniquement
         mvc.perform(as("hugo", get("/api/capacity").param("weeks", "1")))
                 .andExpect(jsonPath("$.people[*].displayName").value(hasItem("Sarah Petit")))
