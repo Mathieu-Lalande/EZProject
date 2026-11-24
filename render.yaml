@@ -1,0 +1,52 @@
+# Blueprint Render : site de démonstration (offre gratuite).
+# Render > New > Blueprint > ce dépôt. Crée l'application (image Docker du dépôt) et une base PostgreSQL.
+# Données de démo créées au premier démarrage ; comptes *@ezproject.local, mot de passe DEMO_PASSWORD.
+# NE PAS y mettre de données réelles : les comptes de démonstration ont un mot de passe connu.
+services:
+  - type: web
+    name: ezproject-demo
+    runtime: docker
+    plan: free
+    region: frankfurt
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    healthCheckPath: /actuator/health/readiness
+    autoDeploy: false
+    envVars:
+      - key: SPRING_PROFILES_ACTIVE
+        value: prod,demo
+      - key: DEMO_PASSWORD
+        value: demo1234
+      # Instance gratuite à faible mémoire : bornes JVM adaptées
+      - key: JAVA_TOOL_OPTIONS
+        value: -XX:MaxRAMPercentage=70 -XX:+UseSerialGC -Xss512k -XX:TieredStopAtLevel=1
+      - key: DB_HOST
+        fromDatabase:
+          name: ezproject-demo-db
+          property: host
+      - key: DB_PORT
+        fromDatabase:
+          name: ezproject-demo-db
+          property: port
+      - key: DB_NAME
+        fromDatabase:
+          name: ezproject-demo-db
+          property: database
+      - key: DB_USERNAME
+        fromDatabase:
+          name: ezproject-demo-db
+          property: user
+      - key: DB_PASSWORD
+        fromDatabase:
+          name: ezproject-demo-db
+          property: password
+      - key: METRICS_TOKEN
+        generateValue: true
+
+databases:
+  - name: ezproject-demo-db
+    databaseName: ezproject
+    user: ezproject
+    plan: free
+    region: frankfurt
+    postgresMajorVersion: "16"

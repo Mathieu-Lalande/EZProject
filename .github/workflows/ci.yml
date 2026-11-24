@@ -37,6 +37,15 @@ jobs:
           distribution: temurin
           java-version: '21'
           cache: maven
+      # Distribution Maven du wrapper mise en cache (sinon retéléchargée depuis Maven Central à chaque job),
+      # avec une seconde tentative en cas d'échec réseau ponctuel.
+      - uses: actions/cache@v4
+        with:
+          path: ~/.m2/wrapper
+          key: mvnw-${{ hashFiles('backend/.mvn/wrapper/maven-wrapper.properties') }}
+      - name: Installer Maven (wrapper)
+        working-directory: backend
+        run: ./mvnw -B -q -v || (sleep 15 && ./mvnw -B -q -v)
       - run: ./mvnw -B verify
 
   frontend:
@@ -77,6 +86,15 @@ jobs:
           distribution: temurin
           java-version: '21'
           cache: maven
+      # Distribution Maven du wrapper mise en cache (sinon retéléchargée depuis Maven Central à chaque job),
+      # avec une seconde tentative en cas d'échec réseau ponctuel.
+      - uses: actions/cache@v4
+        with:
+          path: ~/.m2/wrapper
+          key: mvnw-${{ hashFiles('backend/.mvn/wrapper/maven-wrapper.properties') }}
+      - name: Installer Maven (wrapper)
+        working-directory: backend
+        run: ./mvnw -B -q -v || (sleep 15 && ./mvnw -B -q -v)
       - uses: actions/setup-node@v4
         with:
           node-version: '22'

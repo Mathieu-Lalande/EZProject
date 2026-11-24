@@ -18,6 +18,8 @@ spring:
       max-request-size: 6MB
 
 server:
+  # Les hébergeurs PaaS (Render, Heroku…) imposent le port via la variable PORT
+  port: ${PORT:8080}
   error:
     include-stacktrace: never
     include-message: never

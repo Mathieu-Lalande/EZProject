@@ -143,6 +143,22 @@ La **CI** (GitHub Actions) enchaîne :
 
 Elle est complétée par **CodeQL** (Java et TypeScript) et **Dependabot**.
 
+## Site de démonstration (Render)
+
+[![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/Mathieu-Lalande/EZProject)
+
+Le fichier `render.yaml` décrit l'application (image Docker du dépôt) et une base PostgreSQL 16, sur l'offre gratuite de Render :
+
+1. Créer un compte sur [render.com](https://render.com) et le relier à GitHub.
+2. Cliquer sur le bouton ci-dessus (ou **New → Blueprint** puis choisir ce dépôt), puis **Apply**.
+3. Attendre la fin du premier build (plusieurs minutes), puis ouvrir l'URL `https://ezproject-demo….onrender.com`.
+
+Les données de démonstration sont créées au premier démarrage : `camille@ezproject.local` (COO), `lea@…`, `hugo@…`, `sarah@…`, `julie@…` (invitée) et `bob@acme.local` (autre organisation), mot de passe `demo1234` (variable `DEMO_PASSWORD`).
+
+Profil utilisé : `prod,demo` (cookies `Secure`, en-têtes du proxy de Render pris en compte). La double authentification y est désactivée faute de `MFA_ENCRYPTION_KEY` ; pour l'activer, ajouter une clé générée avec `openssl rand -base64 32` dans les variables du service.
+
+Limites de l'offre gratuite (à vérifier sur la documentation Render, elles évoluent) : mise en veille après inactivité, donc premier chargement lent ; base gratuite à durée limitée. Le site est public : n'y mettez aucune donnée réelle.
+
 ## Mise en production
 
 L'image Docker contient l'API et l'interface. Servez-la en **HTTPS** derrière un reverse proxy.

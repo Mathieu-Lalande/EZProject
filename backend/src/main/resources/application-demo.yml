@@ -1,0 +1,16 @@
+# Site de démonstration public (ex. Render) : s'utilise AVEC le profil prod (SPRING_PROFILES_ACTIVE=prod,demo).
+# Base PostgreSQL décrite par hôte / port / nom (forme fournie par les hébergeurs), données de démo créées
+# au premier démarrage sur base vide. Ne jamais utiliser ce profil pour des données réelles :
+# les comptes de démonstration ont un mot de passe connu.
+spring:
+  datasource:
+    url: jdbc:postgresql://${DB_HOST}:${DB_PORT:5432}/${DB_NAME}
+
+server:
+  # L'hébergeur termine le HTTPS et transmet X-Forwarded-* (IP client pour l'anti-abus, schéma https)
+  forward-headers-strategy: ${FORWARD_HEADERS_STRATEGY:native}
+
+app:
+  seed:
+    enabled: true
+    demo-password: ${DEMO_PASSWORD:demo1234}
