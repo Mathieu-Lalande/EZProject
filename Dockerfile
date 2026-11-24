@@ -19,7 +19,7 @@ COPY --from=frontend /build/frontend/dist ./src/main/resources/static
 RUN mvn -B -q -DskipTests package
 
 # 3) Exécution : JRE seul, utilisateur non root
-FROM eclipse-temurin:21-jre-alpine
+FROM eclipse-temurin:25-jre-alpine
 RUN addgroup -S app && adduser -S app -G app
 WORKDIR /app
 COPY --from=backend /build/backend/target/ezproject-backend-*.jar app.jar
