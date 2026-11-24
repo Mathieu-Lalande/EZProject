@@ -58,7 +58,8 @@ public class RetroPlanningService {
         List<PhaseInput> inputs = phases.stream()
                 .map(p -> new PhaseInput(p.getId(), p.getName(), p.getKind(), p.getDurationDays(), p.isDone()))
                 .toList();
-        List<PhaseDto> scheduled = calculator.scheduleBackward(deadline, inputs).stream()
+        List<PhaseDto> scheduled = calculator
+                .scheduleBackward(deadline, inputs, project.getOrganization().getHolidayCalendar()).stream()
                 .map(s -> new PhaseDto(s.id(), s.name(), s.kind(), s.durationDays(), s.done(), s.start(), s.end(),
                         stateOf(s, today)))
                 .toList();

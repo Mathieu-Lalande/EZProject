@@ -15,6 +15,7 @@ import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
 
 import com.ezproject.access.Visibility;
+import com.ezproject.audit.AuditService;
 import com.ezproject.common.BusinessRuleException;
 import com.ezproject.common.NotFoundException;
 import com.ezproject.project.Health;
@@ -84,10 +85,19 @@ public class ImportService {
     private final CurrentUser currentUser;
     private final Validator validator;
     private final TransactionTemplate transaction;
+    private final AuditService audit;
+    private com.ezproject.observability.AppMetrics metrics;
+
+    @org.springframework.beans.factory.annotation.Autowired
+    void setMetrics(com.ezproject.observability.AppMetrics metrics) {
+        this.metrics = metrics;
+    }
 
     public ImportService(ProjectService projectService, ProjectRepository projectRepository, TaskService taskService,
                          TeamService teamService, TeamRepository teamRepository, UserService userService,
-                         CurrentUser currentUser, Validator validator, PlatformTransactionManager txManager) {
+                         CurrentUser currentUser, Validator validator, PlatformTransactionManager txManager,
+                         AuditService audit) {
+        this.audit = audit;
         this.projectService = projectService;
         this.projectRepository = projectRepository;
         this.taskService = taskService;
@@ -181,7 +191,8 @@ public class ImportService {
                             ValueParser.enumValue(Priority.class, row.get("priorite", "priority"), TASK_PRIORITY, "Priorité"),
                             resolveUser(row.get("assigne", "assignee", "assignee_email", "responsable"), orgId),
                             ValueParser.integer(row.get("points", "story_points"), "Points"),
-                            ValueParser.date(row.get("echeance", "due_date", "date"), "Échéance"));
+                            ValueParser.date(row.get("echeance", "due_date", "date"), "Échéance"),
+                            labels(row.get("etiquettes", "labels", "tags")));
                     validate(request);
                     taskService.create(project.getId(), request);
                     c.created++;
@@ -197,8 +208,14 @@ public class ImportService {
     private ImportReport finish(org.springframework.transaction.TransactionStatus tx, boolean dryRun, int rows,
                                 Counters c) {
         boolean applied = !dryRun && c.errors.isEmpty();
+        if (metrics != null && !dryRun) {
+            metrics.imported("csv", applied);
+        }
         if (!applied) {
             tx.setRollbackOnly();
+        } else {
+            audit.record("IMPORT", "ORGANIZATION", null, "Import CSV : " + c.created + " création(s), " + c.updated
+                    + " mise(s) à jour, " + c.teamsCreated + " équipe(s)");
         }
         return new ImportReport(dryRun, applied, rows, c.created, c.updated, c.teamsCreated, List.copyOf(c.errors),
                 c.preview.stream().limit(50).toList());
@@ -242,6 +259,15 @@ public class ImportService {
             return "Droits insuffisants sur ce projet";
         }
         return "Ligne invalide";
+    }
+
+    /** Étiquettes séparées par « | », « ; » ou « , ». */
+    private static java.util.Set<String> labels(String raw) {
+        if (raw == null) {
+            return null;
+        }
+        return java.util.Arrays.stream(raw.split("[|;,]")).map(String::trim).filter(x -> !x.isEmpty())
+                .collect(java.util.stream.Collectors.toCollection(java.util.LinkedHashSet::new));
     }
 
     private static String upper(String s) {

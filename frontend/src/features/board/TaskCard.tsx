@@ -1,6 +1,6 @@
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { CalendarDays } from 'lucide-react';
+import { CalendarDays, CheckSquare, MessageSquare, Paperclip } from 'lucide-react';
 import clsx from 'clsx';
 import type { Priority, Task } from '../../api/types';
 import { Avatar } from '../../components/ui/Avatar';
@@ -27,7 +27,18 @@ export function TaskCardView({ task, dragging, onClick }: { task: Task; dragging
         <span className={clsx('mt-1.5 size-1.5 shrink-0 rounded-full', priorityStyle[task.priority])} title={`Priorité ${priorityLabel[task.priority]}`} />
         <p className={clsx('flex-1 text-sm leading-snug', task.status === 'DONE' && 'text-ink-3 line-through')}>{task.title}</p>
       </div>
+      {task.labels.length > 0 && (
+        <div className="mt-2 flex flex-wrap gap-1">
+          {task.labels.map((l) => <span key={l} className="rounded bg-brand-50 px-1.5 py-0.5 text-[10px] font-medium text-brand-700 dark:bg-brand-500/15 dark:text-brand-200">{l}</span>)}
+        </div>
+      )}
       <div className="mt-3 flex items-center gap-2">
+        {task.counts.checklistTotal > 0 && (
+          <span className={clsx('flex items-center gap-0.5 text-[11px] tabular-nums', task.counts.checklistDone === task.counts.checklistTotal ? 'text-emerald-600' : 'text-ink-3')}
+            title="Sous-tâches terminées"><CheckSquare className="size-3" />{task.counts.checklistDone}/{task.counts.checklistTotal}</span>
+        )}
+        {task.counts.comments > 0 && <span className="flex items-center gap-0.5 text-[11px] text-ink-3" title="Commentaires"><MessageSquare className="size-3" />{task.counts.comments}</span>}
+        {task.counts.attachments > 0 && <span className="flex items-center gap-0.5 text-[11px] text-ink-3" title="Pièces jointes"><Paperclip className="size-3" />{task.counts.attachments}</span>}
         {task.storyPoints !== null && (
           <span className="rounded-md bg-surface-2 px-1.5 py-0.5 text-[11px] font-semibold tabular-nums text-ink-2">{task.storyPoints} pts</span>
         )}

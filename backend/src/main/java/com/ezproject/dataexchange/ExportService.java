@@ -50,13 +50,15 @@ public class ExportService {
         StringBuilder sb = new StringBuilder(CsvExport.BOM);
         sb.append(CsvExport.line(List.of("code", "nom", "client", "type", "equipe", "priorite", "statut", "motif_statut",
                 "meteo", "responsable", "debut", "echeance", "jours_restants", "avancement_pct", "taches", "taches_terminees",
-                "taches_en_retard", "phases_en_retard", "prochain_jalon", "date_jalon", "a_risque")));
+                "taches_en_retard", "phases_en_retard", "prochain_jalon", "date_jalon", "a_risque", "budget_jours",
+                "jours_consommes", "budget_consomme_pct")));
         for (PortfolioDto.ProjectSummary p : projects) {
             sb.append(CsvExport.line(java.util.Arrays.asList(p.code(), p.name(), p.client(), p.type(), p.teamName(),
                     p.priority(), p.status(), p.statusReason(), p.health(), p.ownerName(), p.startDate(), p.endDate(),
                     p.daysRemaining(), p.progress(), p.tasksTotal(), p.tasksByStatus().get(com.ezproject.task.TaskStatus.DONE),
                     p.overdueTasks(), p.latePhases(), p.nextMilestone() == null ? null : p.nextMilestone().name(),
-                    p.nextMilestone() == null ? null : p.nextMilestone().date(), p.atRisk() ? "oui" : "non")));
+                    p.nextMilestone() == null ? null : p.nextMilestone().date(), p.atRisk() ? "oui" : "non",
+                    p.budgetDays(), p.consumedDays(), p.budgetPct())));
         }
         return sb.toString();
     }

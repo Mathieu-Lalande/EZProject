@@ -1,6 +1,28 @@
+import { useEffect, useState } from 'react';
 import { useMutation, useQuery, useQueryClient, type QueryKey } from '@tanstack/react-query';
-import { api } from './client';
+import { api, request } from './client';
 import type {
+  TaskDetails,
+  Copil,
+  Decision,
+  DecisionStatus,
+  Risk,
+  RiskInput,
+  RoadmapProject,
+  StatusReport,
+  Trend,
+  Health,
+  Absence,
+  AbsenceKind,
+  Allocation,
+  Capacity,
+  HolidayCalendar,
+  TimeEntry,
+  TimeSummary,
+  Timesheet,
+  WeekCell,
+  AuditEntry,
+  PageDto,
   ImportReport,
   Me,
   Organization,
@@ -64,8 +86,17 @@ export function useLogin() {
     mutationFn: async ({ email, password }: { email: string; password: string }) => {
       // Une première requête GET garantit la présence du cookie XSRF-TOKEN
       await api.get('/api/auth/me').catch(() => undefined);
-      await api.postForm('/api/auth/login', new URLSearchParams({ email, password }));
+      const res = await api.postForm<{ mfaRequired?: boolean } | undefined>('/api/auth/login', new URLSearchParams({ email, password }));
+      return { mfaRequired: !!res?.mfaRequired };
     },
+    onSuccess: (r) => (r.mfaRequired ? undefined : qc.invalidateQueries({ queryKey: keys.me })),
+  });
+}
+
+export function useVerifyMfa() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (code: string) => api.post('/api/auth/mfa/verify', { code }),
     onSuccess: () => qc.invalidateQueries({ queryKey: keys.me }),
   });
 }
@@ -105,6 +136,71 @@ export function useChangeUserRole() {
   return useMutation({
     mutationFn: ({ userId, role }: { userId: number; role: Role }) => api.put<User>(`/api/users/${userId}/role`, { role }),
     onSuccess: () => invalidate(keys.users, keys.projects, keys.portfolio),
+  });
+}
+
+// ---------- Mon compte ----------
+export function useAccountMutations() {
+  const qc = useQueryClient();
+  return {
+    profile: useMutation({
+      mutationFn: (input: { displayName: string; jobTitle: string | null }) => api.put<User>('/api/account/profile', input),
+      onSuccess: () => qc.invalidateQueries({ queryKey: keys.me }),
+    }),
+    password: useMutation({
+      mutationFn: (input: { currentPassword: string; newPassword: string }) => api.put('/api/account/password', input),
+      onSuccess: () => qc.invalidateQueries({ queryKey: keys.me }),
+    }),
+  };
+}
+
+export function useDeleteAccount() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (password: string) => request('DELETE', '/api/account', { password }),
+    onSuccess: () => {
+      qc.clear();
+      void qc.invalidateQueries({ queryKey: keys.me });
+    },
+  });
+}
+
+// ---------- Administration des comptes ----------
+export function useUserAdmin() {
+  const invalidate = useInvalidate();
+  const onSuccess = () => invalidate(keys.users, keys.organization);
+  return {
+    resetPassword: useMutation({
+      mutationFn: (userId: number) => api.post<{ temporaryPassword: string }>(`/api/users/${userId}/reset-password`),
+    }),
+    setActive: useMutation({
+      mutationFn: ({ userId, active }: { userId: number; active: boolean }) =>
+        api.put<User>(`/api/users/${userId}/active`, { active }),
+      onSuccess,
+    }),
+    remove: useMutation({ mutationFn: (userId: number) => api.delete(`/api/users/${userId}`), onSuccess }),
+    resetMfa: useMutation({ mutationFn: (userId: number) => api.delete(`/api/users/${userId}/mfa`), onSuccess }),
+  };
+}
+
+export const useAudit = (params: { page: number; q: string; entityType: string }) =>
+  useQuery({
+    queryKey: ['audit', params],
+    queryFn: () =>
+      api.get<PageDto<AuditEntry>>(
+        `/api/organization/audit?page=${params.page}&size=25&q=${encodeURIComponent(params.q)}&entityType=${params.entityType}`,
+      ),
+    placeholderData: (previous) => previous,
+  });
+
+export function useDeleteOrganization() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (confirmationName: string) => request('DELETE', '/api/organization', { confirmationName }),
+    onSuccess: () => {
+      qc.clear();
+      void qc.invalidateQueries({ queryKey: keys.me });
+    },
   });
 }
 
@@ -348,13 +444,29 @@ export function useRetroMutations(projectId: number) {
 export const usePokerDeck = () =>
   useQuery({ queryKey: ['poker', 'deck'], queryFn: () => api.get<string[]>('/api/poker/deck'), staleTime: Infinity });
 
-/** Rafraîchi toutes les 2 s pour voir les votes des autres participants en quasi temps réel. */
-export const usePokerRounds = (projectId: number) =>
-  useQuery({
+/**
+ * Tours de poker en temps réel : un flux SSE signale chaque changement (vote, révélation…) et déclenche
+ * un rechargement ; un rafraîchissement lent (15 s) sert de filet si le flux est coupé.
+ */
+export function usePokerRounds(projectId: number) {
+  const qc = useQueryClient();
+  const [live, setLive] = useState(false);
+  useEffect(() => {
+    if (typeof EventSource === 'undefined') return;
+    const source = new EventSource(`/api/projects/${projectId}/poker/stream`);
+    const refresh = () => void qc.invalidateQueries({ queryKey: keys.poker(projectId) });
+    source.addEventListener('ready', () => setLive(true));
+    source.addEventListener('poker', refresh);
+    source.onerror = () => setLive(false);
+    return () => source.close();
+  }, [projectId, qc]);
+  const query = useQuery({
     queryKey: keys.poker(projectId),
     queryFn: () => api.get<PokerRound[]>(`/api/projects/${projectId}/poker/rounds`),
-    refetchInterval: 2000,
+    refetchInterval: live ? 15_000 : 3_000,
   });
+  return { ...query, live };
+}
 
 export function usePokerMutations(projectId: number) {
   const invalidate = useInvalidate();
@@ -392,3 +504,177 @@ export const usePortfolio = (teamId?: number) =>
     queryKey: [...keys.portfolio, teamId ?? 'all'],
     queryFn: () => api.get<Portfolio>(teamId ? `/api/portfolio?teamId=${teamId}` : '/api/portfolio'),
   });
+
+// ---------- Temps & budget ----------
+export const useTimeSummary = (projectId: number) =>
+  useQuery({ queryKey: ['projects', projectId, 'time', 'summary'], queryFn: () => api.get<TimeSummary>(`/api/projects/${projectId}/time/summary`) });
+
+export const useTimeEntries = (projectId: number, page: number) =>
+  useQuery({
+    queryKey: ['projects', projectId, 'time', 'entries', page],
+    queryFn: () => api.get<PageDto<TimeEntry>>(`/api/projects/${projectId}/time?page=${page}&size=15`),
+    placeholderData: (previous) => previous,
+  });
+
+export function useTimeMutations(projectId: number) {
+  const invalidate = useInvalidate();
+  const onSuccess = () => invalidate(['projects', projectId, 'time'], keys.portfolio, ['timesheet']);
+  return {
+    log: useMutation({
+      mutationFn: (input: { date: string; days: number; taskId?: number | null; userId?: number | null; comment?: string }) =>
+        api.post<TimeEntry>(`/api/projects/${projectId}/time`, input),
+      onSuccess,
+    }),
+    remove: useMutation({ mutationFn: (id: number) => api.delete(`/api/time/${id}`), onSuccess }),
+  };
+}
+
+export const useTimesheet = (date: string) =>
+  useQuery({ queryKey: ['timesheet', date], queryFn: () => api.get<Timesheet>(`/api/time/week?date=${date}`) });
+
+export function useSaveTimesheet() {
+  const invalidate = useInvalidate();
+  return useMutation({
+    mutationFn: (input: { weekStart: string; cells: WeekCell[] }) => api.put<Timesheet>('/api/time/week', input),
+    onSuccess: () => invalidate(['timesheet'], keys.portfolio, ['projects']),
+  });
+}
+
+// ---------- Capacité ----------
+export const useAllocations = (projectId: number, enabled = true) =>
+  useQuery({ queryKey: ['projects', projectId, 'allocations'], queryFn: () => api.get<Allocation[]>(`/api/projects/${projectId}/allocations`), enabled });
+
+export function useAllocationMutations(projectId: number) {
+  const invalidate = useInvalidate();
+  const onSuccess = () => invalidate(['projects', projectId, 'allocations'], ['capacity']);
+  return {
+    create: useMutation({
+      mutationFn: (input: { userId: number; startDate: string; endDate: string; daysPerWeek: number }) =>
+        api.post<Allocation>(`/api/projects/${projectId}/allocations`, input),
+      onSuccess,
+    }),
+    remove: useMutation({ mutationFn: (id: number) => api.delete(`/api/allocations/${id}`), onSuccess }),
+  };
+}
+
+export const useCapacity = (from: string, weeks: number, teamId?: number) =>
+  useQuery({
+    queryKey: ['capacity', from, weeks, teamId ?? 'all'],
+    queryFn: () => api.get<Capacity>(`/api/capacity?from=${from}&weeks=${weeks}${teamId ? `&teamId=${teamId}` : ''}`),
+    placeholderData: (previous) => previous,
+  });
+
+export const useAbsences = (from: string, to: string) =>
+  useQuery({ queryKey: ['absences', from, to], queryFn: () => api.get<Absence[]>(`/api/absences?from=${from}&to=${to}`) });
+
+export const useMyAbsences = () => useQuery({ queryKey: ['absences', 'mine'], queryFn: () => api.get<Absence[]>('/api/absences/mine') });
+
+export function useAbsenceMutations() {
+  const invalidate = useInvalidate();
+  const onSuccess = () => invalidate(['absences'], ['capacity']);
+  return {
+    create: useMutation({
+      mutationFn: (input: { startDate: string; endDate: string; kind: AbsenceKind; comment?: string; userId?: number }) =>
+        api.post<Absence>('/api/absences', input),
+      onSuccess,
+    }),
+    remove: useMutation({ mutationFn: (id: number) => api.delete(`/api/absences/${id}`), onSuccess }),
+  };
+}
+
+export function useChangeCapacity() {
+  const invalidate = useInvalidate();
+  return useMutation({
+    mutationFn: ({ userId, daysPerWeek }: { userId: number; daysPerWeek: number }) =>
+      api.put(`/api/users/${userId}/capacity`, { daysPerWeek }),
+    onSuccess: () => invalidate(keys.users, ['capacity']),
+  });
+}
+
+export function useChangeHolidayCalendar() {
+  const invalidate = useInvalidate();
+  return useMutation({
+    mutationFn: (calendar: HolidayCalendar) => api.put('/api/organization/holiday-calendar', { calendar }),
+    onSuccess: () => invalidate(keys.organization, ['projects'], ['capacity'], ['timesheet']),
+  });
+}
+
+// ---------- Risques & décisions ----------
+export const useRisks = (projectId: number) =>
+  useQuery({ queryKey: ['projects', projectId, 'risks'], queryFn: () => api.get<Risk[]>(`/api/projects/${projectId}/risks`) });
+
+export const useDecisions = (projectId: number) =>
+  useQuery({ queryKey: ['projects', projectId, 'decisions'], queryFn: () => api.get<Decision[]>(`/api/projects/${projectId}/decisions`) });
+
+export function useRiskMutations(projectId: number) {
+  const invalidate = useInvalidate();
+  const onSuccess = () => invalidate(['projects', projectId, 'risks'], ['projects', projectId, 'decisions'], keys.portfolio);
+  return {
+    saveRisk: useMutation({
+      mutationFn: ({ id, input }: { id?: number; input: RiskInput }) =>
+        id ? api.put<Risk>(`/api/risks/${id}`, input) : api.post<Risk>(`/api/projects/${projectId}/risks`, input),
+      onSuccess,
+    }),
+    removeRisk: useMutation({ mutationFn: (id: number) => api.delete(`/api/risks/${id}`), onSuccess }),
+    saveDecision: useMutation({
+      mutationFn: ({ id, input }: { id?: number; input: { title: string; description?: string | null; decidedOn?: string | null; decidedBy?: string | null; status?: DecisionStatus } }) =>
+        id ? api.put<Decision>(`/api/decisions/${id}`, input) : api.post<Decision>(`/api/projects/${projectId}/decisions`, input),
+      onSuccess,
+    }),
+    removeDecision: useMutation({ mutationFn: (id: number) => api.delete(`/api/decisions/${id}`), onSuccess }),
+  };
+}
+
+// ---------- Météo & COPIL ----------
+export const useReports = (projectId: number) =>
+  useQuery({ queryKey: ['projects', projectId, 'reports'], queryFn: () => api.get<StatusReport[]>(`/api/projects/${projectId}/reports`) });
+
+export function usePublishReport(projectId: number) {
+  const invalidate = useInvalidate();
+  return useMutation({
+    mutationFn: (input: { health: Health; trend: Trend; summary: string; achievements?: string; nextSteps?: string; attentionPoints?: string }) =>
+      api.post<StatusReport>(`/api/projects/${projectId}/reports`, input),
+    onSuccess: () => invalidate(['projects', projectId, 'reports'], keys.projects, keys.portfolio),
+  });
+}
+
+export const useCopil = (projectId: number) =>
+  useQuery({ queryKey: ['projects', projectId, 'copil'], queryFn: () => api.get<Copil>(`/api/projects/${projectId}/copil`) });
+
+export const useRoadmap = (teamId?: number) =>
+  useQuery({
+    queryKey: ['roadmap', teamId ?? 'all'],
+    queryFn: () => api.get<RoadmapProject[]>(teamId ? `/api/portfolio/roadmap?teamId=${teamId}` : '/api/portfolio/roadmap'),
+  });
+
+// ---------- Collaboration sur les tâches ----------
+export const useTaskDetails = (taskId: number | null) =>
+  useQuery({
+    queryKey: ['task-details', taskId],
+    queryFn: () => api.get<TaskDetails>(`/api/tasks/${taskId}/details`),
+    enabled: taskId !== null,
+  });
+
+export function useCollaboration(taskId: number, projectId: number) {
+  const invalidate = useInvalidate();
+  const onSuccess = () => invalidate(['task-details', taskId], keys.tasks(projectId));
+  return {
+    comment: useMutation({ mutationFn: (body: string) => api.post(`/api/tasks/${taskId}/comments`, { body }), onSuccess }),
+    deleteComment: useMutation({ mutationFn: (id: number) => api.delete(`/api/comments/${id}`), onSuccess }),
+    addItem: useMutation({ mutationFn: (title: string) => api.post(`/api/tasks/${taskId}/checklist`, { title, done: false }), onSuccess }),
+    updateItem: useMutation({
+      mutationFn: ({ id, title, done }: { id: number; title: string; done: boolean }) => api.put(`/api/checklist/${id}`, { title, done }),
+      onSuccess,
+    }),
+    deleteItem: useMutation({ mutationFn: (id: number) => api.delete(`/api/checklist/${id}`), onSuccess }),
+    attach: useMutation({
+      mutationFn: (file: File) => {
+        const data = new FormData();
+        data.append('file', file);
+        return api.upload(`/api/tasks/${taskId}/attachments`, data);
+      },
+      onSuccess,
+    }),
+    deleteAttachment: useMutation({ mutationFn: (id: number) => api.delete(`/api/attachments/${id}`), onSuccess }),
+  };
+}

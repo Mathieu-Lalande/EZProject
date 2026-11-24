@@ -8,6 +8,7 @@ import { formatDate } from '../../lib/format';
 import { TASK_COLUMNS, phaseStateLabel, taskStatusLabel } from '../../lib/labels';
 import { TodoList } from '../todos/TodoList';
 import { ProjectHistory } from './ProjectHistory';
+import { WeatherPanel } from '../report/WeatherPanel';
 import { can } from '../../lib/permissions';
 
 const statusColor = { BACKLOG: '#a1a1aa', TODO: '#0ea5e9', IN_PROGRESS: '#6366f1', REVIEW: '#f59e0b', DONE: '#10b981' } as const;
@@ -27,6 +28,7 @@ export function ProjectOverview({ project }: { project: Project }) {
   return (
     <div className="grid gap-6 lg:grid-cols-[1fr_320px]">
       <div className="min-w-0 space-y-6">
+        <WeatherPanel project={project} />
         <div className="card p-5">
           <h3 className="text-sm font-semibold">Avancement</h3>
           <div className="mt-3 flex items-end gap-3">

@@ -9,6 +9,10 @@ function reasons(p: ProjectSummary): string[] {
   if (p.overdueTasks > 0) r.push(`${p.overdueTasks} tâche(s) en retard`);
   if (p.latePhases > 0) r.push(`${p.latePhases} phase(s) en retard`);
   if (p.daysRemaining !== null && p.daysRemaining < 0) r.push('échéance dépassée');
+  if (p.criticalRisks > 0) r.push(`${p.criticalRisks} risque(s) critique(s)`);
+  if (p.reportStale) r.push('météo non mise à jour');
+  if (p.budgetPct !== null && p.budgetPct > 100) r.push(`budget dépassé (${p.budgetPct} %)`);
+  else if (p.budgetPct !== null && p.budgetPct - p.progress > 25) r.push(`budget consommé ${p.budgetPct} % pour ${p.progress} % d'avancement`);
   return r;
 }
 

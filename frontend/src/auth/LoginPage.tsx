@@ -1,7 +1,7 @@
 import { useState, type FormEvent } from 'react';
 import { Link, Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { LayoutGrid, KanbanSquare, CalendarClock, Spade } from 'lucide-react';
-import { useLogin, useMe } from '../api/hooks';
+import { useLogin, useMe, useVerifyMfa } from '../api/hooks';
 import { ApiError } from '../api/client';
 import { Button } from '../components/ui/Button';
 import { Field } from '../components/ui/Field';
@@ -20,16 +20,42 @@ export function LoginPage() {
   const location = useLocation();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [mfaStep, setMfaStep] = useState(false);
+  const [code, setCode] = useState('');
+  const verify = useVerifyMfa();
 
   if (me) return <Navigate to="/" replace />;
 
+  const goNext = () => navigate((location.state as { from?: string } | null)?.from ?? '/', { replace: true });
   const submit = (e: FormEvent) => {
     e.preventDefault();
-    login.mutate(
-      { email, password },
-      { onSuccess: () => navigate((location.state as { from?: string } | null)?.from ?? '/', { replace: true }) },
-    );
+    login.mutate({ email, password }, { onSuccess: (r) => (r.mfaRequired ? setMfaStep(true) : goNext()) });
   };
+  const submitCode = (e: FormEvent) => {
+    e.preventDefault();
+    verify.mutate(code.trim(), { onSuccess: goNext });
+  };
+
+  if (mfaStep) {
+    return (
+      <div className="flex min-h-screen items-center justify-center p-6">
+        <form onSubmit={submitCode} className="card w-full max-w-sm animate-pop-in space-y-4 p-8">
+          <h2 className="text-xl font-semibold">Vérification en deux étapes</h2>
+          <p className="text-sm text-ink-3">Saisissez le code à 6 chiffres de votre application d'authentification, ou un code de secours.</p>
+          <Field label="Code">
+            <input className="input font-mono tracking-widest" autoFocus autoComplete="one-time-code" maxLength={9} required value={code} onChange={(e) => setCode(e.target.value)} />
+          </Field>
+          {verify.isError && (
+            <p role="alert" className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700 dark:bg-red-500/10 dark:text-red-300">
+              {verify.error instanceof ApiError && verify.error.status === 429 ? 'Trop de tentatives : reconnectez-vous plus tard.' : 'Code incorrect.'}
+            </p>
+          )}
+          <Button type="submit" className="w-full" loading={verify.isPending}>Valider</Button>
+          <button type="button" className="w-full text-center text-xs text-ink-3 hover:text-ink" onClick={() => { setMfaStep(false); setCode(''); }}>← Revenir</button>
+        </form>
+      </div>
+    );
+  }
 
   return (
     <div className="grid min-h-screen lg:grid-cols-2">
@@ -78,6 +104,7 @@ export function LoginPage() {
           <p className="mt-6 text-center text-sm text-ink-3">
             Nouveau sur EZProject ? <Link to="/signup" className="font-medium text-brand-600 hover:underline">Créer une organisation</Link>
           </p>
+          <p className="mt-2 text-center text-xs text-ink-3"><Link to="/privacy" className="hover:underline">Confidentialité</Link></p>
           {import.meta.env.DEV && (
             <div className="mt-8 rounded-lg border border-dashed border-line p-3 text-xs text-ink-3">
               <div className="mb-1 font-medium text-ink-2">Comptes de démo (profil dev)</div>

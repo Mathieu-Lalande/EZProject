@@ -1,6 +1,5 @@
 package com.ezproject.retroplanning;
 
-import java.time.DayOfWeek;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -8,9 +7,11 @@ import java.util.List;
 
 import org.springframework.stereotype.Component;
 
+import com.ezproject.calendar.HolidayCalendar;
+
 /**
  * Calcul de rétro-planning : on part de l'échéance et on remonte le temps, phase par phase,
- * en jours ouvrés (lundi-vendredi). Sans état, donc trivialement testable.
+ * en jours ouvrés (hors week-ends et jours fériés du calendrier choisi). Sans état, donc trivialement testable.
  */
 @Component
 public class RetroPlanningCalculator {
@@ -28,8 +29,12 @@ public class RetroPlanningCalculator {
      * @return phases datées, dans l'ordre chronologique
      */
     public List<ScheduledPhase> scheduleBackward(LocalDate deadline, List<PhaseInput> phases) {
+        return scheduleBackward(deadline, phases, HolidayCalendar.NONE);
+    }
+
+    public List<ScheduledPhase> scheduleBackward(LocalDate deadline, List<PhaseInput> phases, HolidayCalendar calendar) {
         List<ScheduledPhase> result = new ArrayList<>(phases.size());
-        LocalDate cursor = previousOrSameWorkingDay(deadline);
+        LocalDate cursor = previousOrSameWorkingDay(deadline, calendar);
         for (int i = phases.size() - 1; i >= 0; i--) {
             PhaseInput p = phases.get(i);
             if (p.kind() == PhaseKind.MILESTONE) {
@@ -37,35 +42,31 @@ public class RetroPlanningCalculator {
                 continue;
             }
             LocalDate end = cursor;
-            LocalDate start = minusWorkingDays(end, p.durationDays() - 1);
+            LocalDate start = minusWorkingDays(end, p.durationDays() - 1, calendar);
             result.add(new ScheduledPhase(p.id(), p.name(), p.kind(), p.durationDays(), p.done(), start, end));
-            cursor = minusWorkingDays(start, 1);
+            cursor = minusWorkingDays(start, 1, calendar);
         }
         Collections.reverse(result);
         return result;
     }
 
-    static LocalDate previousOrSameWorkingDay(LocalDate date) {
+    static LocalDate previousOrSameWorkingDay(LocalDate date, HolidayCalendar calendar) {
         LocalDate d = date;
-        while (isWeekend(d)) {
+        while (!calendar.isWorkingDay(d)) {
             d = d.minusDays(1);
         }
         return d;
     }
 
-    static LocalDate minusWorkingDays(LocalDate from, int workingDays) {
-        LocalDate d = previousOrSameWorkingDay(from);
+    static LocalDate minusWorkingDays(LocalDate from, int workingDays, HolidayCalendar calendar) {
+        LocalDate d = previousOrSameWorkingDay(from, calendar);
         int remaining = workingDays;
         while (remaining > 0) {
             d = d.minusDays(1);
-            if (!isWeekend(d)) {
+            if (calendar.isWorkingDay(d)) {
                 remaining--;
             }
         }
         return d;
-    }
-
-    private static boolean isWeekend(LocalDate d) {
-        return d.getDayOfWeek() == DayOfWeek.SATURDAY || d.getDayOfWeek() == DayOfWeek.SUNDAY;
     }
 }

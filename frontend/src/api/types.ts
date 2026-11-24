@@ -18,11 +18,20 @@ export type Permission =
   | 'RETRO_EDIT'
   | 'POKER_VIEW'
   | 'POKER_VOTE'
-  | 'POKER_FACILITATE';
+  | 'POKER_FACILITATE'
+  | 'TIME_VIEW'
+  | 'TIME_LOG'
+  | 'TIME_MANAGE'
+  | 'RISK_VIEW'
+  | 'RISK_EDIT'
+  | 'REPORT_EDIT'
+  | 'TASK_COMMENT';
+export type HolidayCalendar = 'NONE' | 'FR';
+export type AbsenceKind = 'VACATION' | 'SICK' | 'TRAINING' | 'OTHER';
 export type ProjectType = 'DEVELOPMENT' | 'CONSULTING' | 'INTERNAL';
 export type ProjectStatus = 'PLANNED' | 'ACTIVE' | 'ON_HOLD' | 'COMPLETED' | 'CANCELLED';
 export type Health = 'GREEN' | 'AMBER' | 'RED';
-export type ModuleType = 'BOARD' | 'TODOS' | 'RETRO_PLANNING' | 'POKER';
+export type ModuleType = 'BOARD' | 'TODOS' | 'RETRO_PLANNING' | 'POKER' | 'TIME_TRACKING' | 'RISKS';
 export type TaskStatus = 'BACKLOG' | 'TODO' | 'IN_PROGRESS' | 'REVIEW' | 'DONE';
 export type Priority = 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
 export type PhaseKind = 'PHASE' | 'MILESTONE';
@@ -35,11 +44,33 @@ export interface User {
   displayName: string;
   role: Role;
   jobTitle: string | null;
+  active: boolean;
+  capacityDaysPerWeek: number;
 }
 
-export interface Me extends User {
+export interface PageDto<T> {
+  content: T[];
+  page: number;
+  size: number;
+  totalElements: number;
+  totalPages: number;
+}
+
+export interface AuditEntry {
+  id: number;
+  actorName: string | null;
+  action: string;
+  entityType: string | null;
+  entityId: number | null;
+  summary: string | null;
+  createdAt: string;
+}
+
+export interface Me extends Omit<User, 'active' | 'capacityDaysPerWeek'> {
   organization: { id: number; name: string; slug: string; plan: Plan };
   teams: { teamId: number; teamName: string; role: ProjectRole }[];
+  mustChangePassword: boolean;
+  mfaEnabled: boolean;
 }
 
 export interface Project {
@@ -110,6 +141,7 @@ export interface Organization {
   slug: string;
   plan: Plan;
   usage: { projects: number; maxProjects: number; users: number; maxUsers: number; customPermissions: boolean };
+  holidayCalendar: HolidayCalendar;
 }
 
 export interface ImportReport {
@@ -158,6 +190,16 @@ export interface Task {
   position: number;
   completedAt: string | null;
   overdue: boolean;
+  labels: string[];
+  counts: { comments: number; attachments: number; checklistDone: number; checklistTotal: number };
+}
+
+export interface TaskDetails {
+  comments: { id: number; body: string; authorId: number | null; authorName: string; createdAt: string; editedAt: string | null; editable: boolean }[];
+  checklist: { id: number; title: string; done: boolean }[];
+  attachments: { id: number; filename: string; contentType: string; sizeBytes: number; uploaderName: string | null; createdAt: string; deletable: boolean }[];
+  canComment: boolean;
+  canEdit: boolean;
 }
 
 export interface TaskInput {
@@ -168,6 +210,7 @@ export interface TaskInput {
   assigneeId?: number | null;
   storyPoints?: number | null;
   dueDate?: string | null;
+  labels?: string[];
 }
 
 export interface Todo {
@@ -247,6 +290,12 @@ export interface ProjectSummary {
   nextMilestone: { name: string; date: string } | null;
   latePhases: number;
   atRisk: boolean;
+  budgetDays: number | null;
+  consumedDays: number;
+  budgetPct: number | null;
+  criticalRisks: number;
+  latestReport: { date: string; trend: Trend; summary: string; authorName: string | null } | null;
+  reportStale: boolean;
 }
 
 export interface Portfolio {
@@ -257,10 +306,171 @@ export interface Portfolio {
     atRiskProjects: number;
     onHoldProjects: number;
     p1Projects: number;
+    overBudgetProjects: number;
+    criticalRisks: number;
     openTasks: number;
     overdueTasks: number;
     completedLast7Days: number;
   };
   projects: ProjectSummary[];
   workload: { userId: number; displayName: string; jobTitle: string | null; openTasks: number; openPoints: number }[];
+}
+
+// ---------- Temps & budget ----------
+export interface TimeSummary {
+  budgetDays: number | null;
+  consumedDays: number;
+  remainingDays: number | null;
+  consumptionPct: number | null;
+  weeklyBurn: number;
+  projectedExhaustion: string | null;
+  overBudget: boolean;
+  byUser: { userId: number; name: string; days: number }[];
+  byMonth: { month: string; days: number }[];
+}
+
+export interface TimeEntry {
+  id: number;
+  date: string;
+  days: number;
+  userId: number;
+  userName: string;
+  taskId: number | null;
+  taskTitle: string | null;
+  comment: string | null;
+  editable: boolean;
+}
+
+export interface WeekCell {
+  projectId: number;
+  date: string;
+  days: number;
+}
+
+export interface Timesheet {
+  weekStart: string;
+  days: string[];
+  workingDays: boolean[];
+  projects: { projectId: number; code: string; name: string; color: string }[];
+  cells: WeekCell[];
+  taskEntries: TimeEntry[];
+}
+
+// ---------- Capacité ----------
+export interface Allocation {
+  id: number;
+  projectId: number;
+  projectCode: string;
+  projectName: string;
+  projectColor: string;
+  userId: number;
+  userName: string;
+  startDate: string;
+  endDate: string;
+  daysPerWeek: number;
+}
+
+export interface Absence {
+  id: number;
+  userId: number;
+  userName: string;
+  startDate: string;
+  endDate: string;
+  kind: AbsenceKind | null;
+  comment: string | null;
+  editable: boolean;
+}
+
+export interface WeekLoad {
+  weekStart: string;
+  capacity: number;
+  absent: number;
+  available: number;
+  allocated: number;
+  loadPct: number | null;
+}
+
+export interface Capacity {
+  weeks: string[];
+  people: { userId: number; displayName: string; jobTitle: string | null; daysPerWeek: number; weeks: WeekLoad[]; allocations: Allocation[] }[];
+}
+
+// ---------- Pilotage : risques, décisions, météo, COPIL, roadmap ----------
+export type Trend = 'UP' | 'STABLE' | 'DOWN';
+export type RiskStatus = 'OPEN' | 'MITIGATING' | 'OCCURRED' | 'CLOSED';
+export type DecisionStatus = 'PROPOSED' | 'APPROVED' | 'REJECTED';
+
+export interface Risk {
+  id: number;
+  title: string;
+  description: string | null;
+  probability: number;
+  impact: number;
+  score: number;
+  critical: boolean;
+  status: RiskStatus;
+  ownerId: number | null;
+  ownerName: string | null;
+  mitigation: string | null;
+  dueDate: string | null;
+  updatedAt: string;
+}
+
+export interface RiskInput {
+  title: string;
+  description?: string | null;
+  probability: number;
+  impact: number;
+  status?: RiskStatus;
+  ownerId?: number | null;
+  mitigation?: string | null;
+  dueDate?: string | null;
+}
+
+export interface Decision {
+  id: number;
+  title: string;
+  description: string | null;
+  decidedOn: string | null;
+  decidedBy: string | null;
+  status: DecisionStatus;
+  createdAt: string;
+}
+
+export interface StatusReport {
+  id: number;
+  reportDate: string;
+  health: Health;
+  trend: Trend;
+  summary: string;
+  achievements: string | null;
+  nextSteps: string | null;
+  attentionPoints: string | null;
+  authorName: string | null;
+}
+
+export interface Copil {
+  project: Project;
+  latestReport: StatusReport | null;
+  history: StatusReport[];
+  tasks: { total: number; done: number; overdue: number; progress: number } | null;
+  plan: RetroPlan | null;
+  risks: Risk[] | null;
+  decisions: Decision[] | null;
+  budget: TimeSummary | null;
+  generatedOn: string;
+}
+
+export interface RoadmapProject {
+  id: number;
+  code: string;
+  name: string;
+  color: string;
+  teamName: string | null;
+  status: ProjectStatus;
+  priority: ProjectPriority;
+  health: Health;
+  startDate: string | null;
+  endDate: string | null;
+  phases: RetroPhase[];
 }

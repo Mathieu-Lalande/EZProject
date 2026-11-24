@@ -8,6 +8,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.ezproject.access.ProjectRole;
+import com.ezproject.audit.AuditService;
 import com.ezproject.project.ProjectRepository;
 import com.ezproject.security.CurrentUser;
 import com.ezproject.team.Team;
@@ -28,10 +29,12 @@ public class OrganizationService {
     private final TeamMembershipRepository memberships;
     private final ProjectRepository projects;
     private final CurrentUser currentUser;
+    private final AuditService audit;
 
     public OrganizationService(OrganizationRepository repository, UserService userService, TeamRepository teams,
                                TeamMembershipRepository memberships, ProjectRepository projects,
-                               CurrentUser currentUser) {
+                               CurrentUser currentUser, AuditService audit) {
+        this.audit = audit;
         this.repository = repository;
         this.userService = userService;
         this.teams = teams;
@@ -51,6 +54,7 @@ public class OrganizationService {
                 Role.OWNER, null);
         Team team = teams.save(new Team(org, "Équipe principale", null, "#6366f1"));
         memberships.save(new TeamMembership(team, owner, ProjectRole.LEAD));
+        audit.record(org, owner, "ORGANIZATION_CREATED", "ORGANIZATION", org.getId(), "Création de l'organisation " + org.getName());
         return org;
     }
 
@@ -64,6 +68,8 @@ public class OrganizationService {
         if (!me.getRole().isAdmin()) {
             throw new AccessDeniedException("Réservé aux administrateurs");
         }
+        audit.record("ORGANIZATION_RENAMED", "ORGANIZATION", me.getOrganization().getId(),
+                me.getOrganization().getName() + " → " + name.trim());
         me.getOrganization().rename(name.trim());
         return toDto(me.getOrganization());
     }
@@ -75,6 +81,8 @@ public class OrganizationService {
         if (me.getRole() != Role.OWNER) {
             throw new AccessDeniedException("Réservé au propriétaire de l'organisation");
         }
+        audit.record("PLAN_CHANGED", "ORGANIZATION", me.getOrganization().getId(),
+                me.getOrganization().getPlan() + " → " + plan);
         me.getOrganization().changePlan(plan);
         return toDto(me.getOrganization());
     }
@@ -83,7 +91,8 @@ public class OrganizationService {
         Plan plan = org.getPlan();
         return new OrganizationDto(org.getId(), org.getName(), org.getSlug(), plan,
                 new OrganizationDto.Usage(projects.countByOrganizationId(org.getId()), plan.maxProjects(),
-                        userService.countInOrganization(org.getId()), plan.maxUsers(), plan.allowsCustomPermissions()));
+                        userService.countInOrganization(org.getId()), plan.maxUsers(), plan.allowsCustomPermissions()),
+                org.getHolidayCalendar());
     }
 
     private String uniqueSlug(String name) {

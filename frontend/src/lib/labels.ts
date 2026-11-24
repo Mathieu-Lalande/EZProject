@@ -128,6 +128,26 @@ export const permissionGroups: { label: string; items: { id: Permission; label: 
       { id: 'POKER_FACILITATE', label: 'Animer (lancer, révéler, valider)' },
     ],
   },
+  {
+    label: 'Temps & budget',
+    items: [
+      { id: 'TIME_VIEW', label: 'Voir les temps et le budget' },
+      { id: 'TIME_LOG', label: 'Saisir ses temps' },
+      { id: 'TIME_MANAGE', label: 'Gérer les temps des autres et le staffing' },
+    ],
+  },
+  {
+    label: 'Risques & pilotage',
+    items: [
+      { id: 'RISK_VIEW', label: 'Voir risques et décisions' },
+      { id: 'RISK_EDIT', label: 'Gérer risques et décisions' },
+      { id: 'REPORT_EDIT', label: 'Publier la météo / rapport COPIL' },
+    ],
+  },
+  {
+    label: 'Collaboration',
+    items: [{ id: 'TASK_COMMENT', label: 'Commenter les tâches' }],
+  },
 ];
 
 export const phaseStateLabel: Record<PhaseState, string> = {
@@ -143,6 +163,33 @@ export const moduleInfo: Record<ModuleType, { label: string; description: string
   TODOS: { label: 'Checklist', description: "Todos partagés de l'équipe projet." },
   RETRO_PLANNING: { label: 'Rétro-planning', description: "Phases et jalons calculés à rebours depuis l'échéance." },
   POKER: { label: 'Planning poker', description: 'Estimation collaborative des stories en points.' },
+  TIME_TRACKING: { label: 'Temps & budget', description: 'Saisie des temps passés, consommation du budget, staffing.' },
+  RISKS: { label: 'Risques & décisions', description: 'Registre des risques (probabilité × impact) et des décisions.' },
+};
+
+export const absenceKindLabel: Record<'VACATION' | 'SICK' | 'TRAINING' | 'OTHER', string> = {
+  VACATION: 'Congés',
+  SICK: 'Arrêt maladie',
+  TRAINING: 'Formation',
+  OTHER: 'Autre',
 };
 
 export const TASK_COLUMNS: TaskStatus[] = ['BACKLOG', 'TODO', 'IN_PROGRESS', 'REVIEW', 'DONE'];
+
+export const trendLabel: Record<'UP' | 'STABLE' | 'DOWN', string> = { UP: 'En amélioration', STABLE: 'Stable', DOWN: 'En dégradation' };
+
+export const riskStatusLabel: Record<'OPEN' | 'MITIGATING' | 'OCCURRED' | 'CLOSED', string> = {
+  OPEN: 'Ouvert',
+  MITIGATING: 'En traitement',
+  OCCURRED: 'Survenu',
+  CLOSED: 'Clos',
+};
+
+export const decisionStatusLabel: Record<'PROPOSED' | 'APPROVED' | 'REJECTED', string> = {
+  PROPOSED: 'À décider',
+  APPROVED: 'Validée',
+  REJECTED: 'Refusée',
+};
+
+export const probabilityLabel = ['', 'Faible', 'Possible', 'Probable', 'Quasi certaine'];
+export const impactLabel = ['', 'Mineur', 'Modéré', 'Majeur', 'Critique'];

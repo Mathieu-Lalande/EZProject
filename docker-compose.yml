@@ -1,6 +1,8 @@
 # Exécution locale "comme en prod" : PostgreSQL + application (API et interface sur http://localhost:8080).
 #   docker compose up --build        -> tout lancer
 #   docker compose up -d db          -> uniquement la base (pour lancer l'API avec mvn, profil local)
+#   docker compose --profile redis up  -> + Redis (mode multi-instances : REDIS_ENABLED=true)
+#   docker compose --profile backup run --rm backup -> sauvegarde de la base dans ./backups
 # Les identifiants par défaut ne servent qu'en local : surchargez-les via un fichier .env (voir .env.example).
 services:
   db:
@@ -34,8 +36,37 @@ services:
       ADMIN_EMAIL: ${ADMIN_EMAIL:-}
       ADMIN_PASSWORD: ${ADMIN_PASSWORD:-}
       ADMIN_ORGANIZATION: ${ADMIN_ORGANIZATION:-Mon organisation}
+      # Clé de développement par défaut (publique) : définir MFA_ENCRYPTION_KEY dans .env hors usage local
+      MFA_ENCRYPTION_KEY: ${MFA_ENCRYPTION_KEY:-ZGV2LW9ubHktbWZhLWtleS1ub3QtZm9yLXByb2QtISE=}
+      SESSION_TIMEOUT: ${SESSION_TIMEOUT:-8h}
+      METRICS_TOKEN: ${METRICS_TOKEN:-}
+      REDIS_ENABLED: ${REDIS_ENABLED:-false}
+      SPRING_DATA_REDIS_HOST: redis
     ports:
       - "8080:8080"
+
+  redis:
+    image: redis:7-alpine
+    profiles: [redis]
+    command: ["redis-server", "--save", "", "--appendonly", "no"]
+
+  backup:
+    image: postgres:17-alpine
+    profiles: [backup]
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      PGHOST: db
+      PGUSER: ${DB_USERNAME:-ezproject}
+      PGPASSWORD: ${DB_PASSWORD:-ezproject-local}
+      PGDATABASE: ezproject
+      BACKUP_DIR: /backups
+      BACKUP_RETENTION_DAYS: ${BACKUP_RETENTION_DAYS:-14}
+    volumes:
+      - ./scripts:/scripts:ro
+      - ./backups:/backups
+    entrypoint: ["sh", "/scripts/backup.sh"]
 
 volumes:
   ezproject-data:

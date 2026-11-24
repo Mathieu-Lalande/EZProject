@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom';
 import { AlertTriangle, Flag, PauseCircle } from 'lucide-react';
+import { TrendIcon } from '../report/WeatherPanel';
 import { PriorityBadge } from '../../components/ui/PriorityBadge';
 import { StatusBadge } from '../../components/ui/StatusBadge';
 import clsx from 'clsx';
@@ -23,6 +24,7 @@ export function ProjectsHealthTable({ projects }: { projects: ProjectSummary[] }
               <th className="px-3 py-2.5 font-medium">Responsable</th>
               <th className="px-3 py-2.5 font-medium">Météo</th>
               <th className="w-44 px-3 py-2.5 font-medium">Avancement</th>
+              <th className="px-3 py-2.5 font-medium">Budget</th>
               <th className="px-3 py-2.5 font-medium">Retards</th>
               <th className="px-3 py-2.5 font-medium">Prochain jalon</th>
               <th className="px-4 py-2.5 text-right font-medium">Échéance</th>
@@ -57,13 +59,25 @@ export function ProjectsHealthTable({ projects }: { projects: ProjectSummary[] }
                   )}
                 </td>
                 <td className="px-3 py-3 whitespace-nowrap text-ink-2">{p.ownerName ?? '—'}</td>
-                <td className="px-3 py-3"><HealthBadge health={p.health} /></td>
+                <td className="px-3 py-3">
+                  <span className="flex items-center gap-1"><HealthBadge health={p.health} />{p.latestReport && <TrendIcon trend={p.latestReport.trend} className="size-3.5" />}</span>
+                  {p.reportStale && <span className="mt-1 block text-[11px] text-amber-700 dark:text-amber-300">Météo non mise à jour</span>}
+                  {p.criticalRisks > 0 && <span className="mt-1 block text-[11px] font-medium text-red-600">{p.criticalRisks} risque{p.criticalRisks > 1 ? 's' : ''} critique{p.criticalRisks > 1 ? 's' : ''}</span>}
+                </td>
                 <td className="px-3 py-3">
                   <div className="flex items-center gap-2">
                     <ProgressBar value={p.progress} color={p.color} />
                     <span className="w-9 text-right text-xs tabular-nums text-ink-2">{p.progress}%</span>
                   </div>
                   <div className="mt-1 text-[11px] text-ink-3">{p.tasksByStatus.DONE}/{p.tasksTotal} tâches</div>
+                </td>
+                <td className="px-3 py-3 whitespace-nowrap">
+                  {p.budgetPct === null ? <span className="text-xs text-ink-3">—</span> : (
+                    <span title={`${p.consumedDays} j consommés sur ${p.budgetDays} j`}
+                      className={clsx('text-xs font-semibold tabular-nums', p.budgetPct > 100 ? 'text-red-600' : p.budgetPct - p.progress > 25 ? 'text-amber-600' : 'text-ink-2')}>
+                      {p.budgetPct}%<span className="block text-[11px] font-normal text-ink-3">{Math.round(p.consumedDays)}/{p.budgetDays} j</span>
+                    </span>
+                  )}
                 </td>
                 <td className="px-3 py-3">
                   <div className="flex flex-wrap gap-1">

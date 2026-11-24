@@ -16,9 +16,20 @@ import jakarta.validation.Valid;
 public class PokerController {
 
     private final PokerService service;
+    private final PokerEventHub hub;
+    private final com.ezproject.access.ProjectAccessService access;
 
-    public PokerController(PokerService service) {
+    public PokerController(PokerService service, PokerEventHub hub, com.ezproject.access.ProjectAccessService access) {
         this.service = service;
+        this.hub = hub;
+        this.access = access;
+    }
+
+    /** Flux temps réel des changements du planning poker du projet (Server-Sent Events). */
+    @GetMapping(path = "/api/projects/{projectId}/poker/stream", produces = org.springframework.http.MediaType.TEXT_EVENT_STREAM_VALUE)
+    public org.springframework.web.servlet.mvc.method.annotation.SseEmitter stream(@PathVariable Long projectId) {
+        access.require(projectId, com.ezproject.access.Permission.POKER_VIEW);
+        return hub.subscribe(projectId);
     }
 
     @GetMapping("/api/poker/deck")

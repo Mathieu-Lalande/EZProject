@@ -26,8 +26,11 @@ public class TaskService {
     private final ProjectAccessService access;
     private final UserService userService;
     private final Clock clock;
+    private final com.ezproject.task.collab.CollaborationCounts collaborationCounts;
 
-    public TaskService(TaskRepository repository, ProjectAccessService access, UserService userService, Clock clock) {
+    public TaskService(TaskRepository repository, ProjectAccessService access, UserService userService, Clock clock,
+                       com.ezproject.task.collab.CollaborationCounts collaborationCounts) {
+        this.collaborationCounts = collaborationCounts;
         this.repository = repository;
         this.access = access;
         this.userService = userService;
@@ -37,8 +40,9 @@ public class TaskService {
     public List<TaskDto> findByProject(Long projectId) {
         access.require(projectId, Permission.TASK_VIEW);
         LocalDate today = LocalDate.now(clock);
+        java.util.Map<Long, TaskDto.Counts> counts = collaborationCounts.forProject(projectId);
         return repository.findByProjectIdOrderByPositionAsc(projectId).stream()
-                .map(t -> TaskDto.from(t, today)).toList();
+                .map(t -> TaskDto.from(t, today, counts.getOrDefault(t.getId(), TaskDto.Counts.NONE))).toList();
     }
 
     /** Mes tâches ouvertes, limitées aux projets que je peux encore consulter. */
@@ -128,5 +132,8 @@ public class TaskService {
         AppUser assignee = r.assigneeId() == null ? null : userService.getInOrganization(r.assigneeId(), orgId);
         task.update(r.title(), r.description(), Objects.requireNonNullElse(r.priority(), Priority.MEDIUM),
                 assignee, r.storyPoints(), r.dueDate());
+        if (r.labels() != null) {
+            task.relabel(r.labels());
+        }
     }
 }

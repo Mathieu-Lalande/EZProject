@@ -65,6 +65,9 @@ public class DataExchangeController {
         if (file.isEmpty()) {
             throw new BusinessRuleException("Fichier vide");
         }
+        if (file.getSize() > 2L * 1024 * 1024) {
+            throw new BusinessRuleException("Fichier trop volumineux (2 Mo maximum pour un import)");
+        }
         String name = file.getOriginalFilename() == null ? "" : file.getOriginalFilename().toLowerCase();
         if (!name.endsWith(".csv") && !name.endsWith(".txt")) {
             throw new BusinessRuleException("Format attendu : CSV (enregistrez votre Excel en « CSV UTF-8 »)");

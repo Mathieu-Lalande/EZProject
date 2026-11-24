@@ -9,11 +9,13 @@ spring:
       ddl-auto: validate
   flyway:
     enabled: true
+    # Migrations communes + migrations propres au SGBD (ex. Row-Level Security pour PostgreSQL)
+    locations: classpath:db/migration,classpath:db/vendor/{vendor}
   servlet:
     multipart:
-      # Import CSV : fichiers de taille raisonnable uniquement
-      max-file-size: 2MB
-      max-request-size: 2MB
+      # Pièces jointes (5 Mo) ; l'import CSV applique en plus sa propre limite de 2 Mo
+      max-file-size: 5MB
+      max-request-size: 6MB
 
 server:
   error:
@@ -21,6 +23,8 @@ server:
     include-message: never
   servlet:
     session:
+      # Expiration après inactivité (SESSION_TIMEOUT, ex. 30m, 8h)
+      timeout: ${SESSION_TIMEOUT:8h}
       cookie:
         http-only: true
         same-site: lax
@@ -29,9 +33,33 @@ management:
   endpoints:
     web:
       exposure:
-        include: health
+        # /actuator/prometheus est en plus protégé par jeton (METRICS_TOKEN), voir MetricsTokenFilter
+        include: health,prometheus
+  endpoint:
+    health:
+      probes:
+        enabled: true
+  health:
+    redis:
+      # Vérifié seulement si Redis est utilisé
+      enabled: ${REDIS_ENABLED:false}
+  metrics:
+    tags:
+      application: ezproject
 
 app:
+  redis:
+    # true = compteurs anti-abus et événements temps réel partagés entre instances (SPRING_DATA_REDIS_HOST/PORT/PASSWORD)
+    enabled: ${REDIS_ENABLED:false}
+  rls:
+    # Row-Level Security PostgreSQL (sans effet sur H2)
+    enabled: ${RLS_ENABLED:true}
+  metrics:
+    # Jeton exigé par /actuator/prometheus (Authorization: Bearer ...). Vide = endpoint désactivé.
+    token: ${METRICS_TOKEN:}
+  mfa:
+    # 32 octets en Base64 (ex. : openssl rand -base64 32). Sans clé, la double authentification est indisponible.
+    encryption-key: ${MFA_ENCRYPTION_KEY:}
   rate-limit:
     enabled: true
     login-ip: { capacity: 20, window: 10m }

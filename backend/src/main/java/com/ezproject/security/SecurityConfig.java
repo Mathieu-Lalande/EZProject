@@ -13,6 +13,7 @@ import org.springframework.security.crypto.factory.PasswordEncoderFactories;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.HttpStatusEntryPoint;
+import org.springframework.security.web.access.intercept.AuthorizationFilter;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 import org.springframework.security.web.authentication.logout.HttpStatusReturningLogoutSuccessHandler;
 import org.springframework.security.web.csrf.CookieCsrfTokenRepository;
@@ -21,6 +22,7 @@ import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
 import com.ezproject.ratelimit.LoginThrottle;
+import com.ezproject.user.AppUserRepository;
 import com.ezproject.ratelimit.RateLimitFilter;
 import com.ezproject.ratelimit.RateLimitProperties;
 import com.ezproject.ratelimit.RateLimiter;
@@ -40,10 +42,15 @@ public class SecurityConfig {
 
     @Bean
     SecurityFilterChain securityFilterChain(HttpSecurity http, RateLimiter rateLimiter, LoginThrottle loginThrottle,
-                                            RateLimitProperties rateLimits) throws Exception {
+                                            RateLimitProperties rateLimits, AppUserRepository users,
+                                            com.ezproject.observability.AppMetrics metrics,
+                                            @Value("${app.metrics.token:}") String metricsToken) throws Exception {
         http
+            .addFilterBefore(new com.ezproject.observability.MetricsTokenFilter(metricsToken),
+                    org.springframework.security.web.context.SecurityContextHolderFilter.class)
+            .addFilterAfter(new AccountStatusFilter(users), AuthorizationFilter.class)
             // Instancié ici (et non comme @Bean) pour qu'il ne soit pas enregistré une seconde fois comme filtre servlet
-            .addFilterBefore(new RateLimitFilter(rateLimiter, loginThrottle, rateLimits),
+            .addFilterBefore(new RateLimitFilter(rateLimiter, loginThrottle, rateLimits, metrics),
                     UsernamePasswordAuthenticationFilter.class)
             .cors(cors -> { })
             .csrf(csrf -> csrf
@@ -51,7 +58,7 @@ public class SecurityConfig {
                 .csrfTokenRequestHandler(new SpaCsrfTokenRequestHandler()))
             .authorizeHttpRequests(auth -> auth
                 .requestMatchers(HttpMethod.POST, "/api/auth/login", "/api/auth/signup").permitAll()
-                .requestMatchers("/actuator/health").permitAll()
+                .requestMatchers("/actuator/health", "/actuator/health/**").permitAll()
                 .requestMatchers("/api/**").authenticated()
                 .anyRequest().permitAll())
             .headers(headers -> headers
@@ -67,10 +74,21 @@ public class SecurityConfig {
                 .passwordParameter("password")
                 .successHandler((req, res, auth) -> {
                     loginThrottle.recordSuccess(req.getParameter("email"));
-                    res.setStatus(HttpStatus.NO_CONTENT.value());
+                    boolean mfa = users.findByEmailIgnoreCase(auth.getName()).map(u -> u.isMfaEnabled()).orElse(false);
+                    metrics.login(mfa ? "mfa_required" : "success");
+                    if (mfa) {
+                        // Mot de passe validé : la session reste bloquée jusqu'au second facteur
+                        req.getSession().setAttribute(com.ezproject.mfa.MfaService.PENDING_ATTRIBUTE, Boolean.TRUE);
+                        res.setStatus(HttpStatus.ACCEPTED.value());
+                        res.setContentType("application/json");
+                        res.getWriter().write("{\"mfaRequired\":true}");
+                    } else {
+                        res.setStatus(HttpStatus.NO_CONTENT.value());
+                    }
                 })
                 .failureHandler((req, res, ex) -> {
                     loginThrottle.recordFailure(req.getParameter("email"));
+                    metrics.login("failure");
                     res.sendError(HttpStatus.UNAUTHORIZED.value());
                 }))
             .logout(logout -> logout

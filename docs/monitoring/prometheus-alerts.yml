@@ -1,0 +1,57 @@
+# Règles d'alerte Prometheus d'exemple pour EZProject — à adapter (seuils, durées, routage Alertmanager).
+# Scrape : GET /actuator/prometheus avec "Authorization: Bearer <METRICS_TOKEN>".
+groups:
+  - name: ezproject
+    rules:
+      - alert: EzProjectDown
+        expr: up{job="ezproject"} == 0
+        for: 2m
+        labels: { severity: critical }
+        annotations:
+          summary: "EZProject ne répond plus au scraping"
+
+      - alert: EzProjectHighErrorRate
+        expr: |
+          sum(rate(http_server_requests_seconds_count{application="ezproject", status=~"5.."}[5m]))
+            / sum(rate(http_server_requests_seconds_count{application="ezproject"}[5m])) > 0.05
+        for: 10m
+        labels: { severity: critical }
+        annotations:
+          summary: "Plus de 5 % de réponses 5xx sur 10 minutes"
+
+      - alert: EzProjectSlowResponses
+        expr: |
+          histogram_quantile(0.95, sum by (le) (rate(http_server_requests_seconds_bucket{application="ezproject", uri=~"/api/.*"}[5m]))) > 1
+        for: 15m
+        labels: { severity: warning }
+        annotations:
+          summary: "p95 de l'API au-dessus d'une seconde"
+          description: "Nécessite les histogrammes : management.metrics.distribution.percentiles-histogram.http.server.requests=true"
+
+      - alert: EzProjectLoginBruteForce
+        expr: sum(increase(ezproject_auth_login_total{outcome="failure"}[10m])) > 50
+        labels: { severity: warning }
+        annotations:
+          summary: "Plus de 50 échecs de connexion en 10 minutes (attaque par force brute ?)"
+
+      - alert: EzProjectRateLimitSpike
+        expr: sum by (policy) (increase(ezproject_ratelimit_rejected_total[10m])) > 100
+        labels: { severity: warning }
+        annotations:
+          summary: "Pic de requêtes refusées par l'anti-abus ({{ $labels.policy }})"
+
+      - alert: EzProjectDbPoolSaturated
+        expr: hikaricp_connections_pending{application="ezproject"} > 5
+        for: 5m
+        labels: { severity: warning }
+        annotations:
+          summary: "Des requêtes attendent une connexion à la base"
+
+      - alert: EzProjectHeapPressure
+        expr: |
+          sum(jvm_memory_used_bytes{application="ezproject", area="heap"})
+            / sum(jvm_memory_max_bytes{application="ezproject", area="heap"}) > 0.9
+        for: 10m
+        labels: { severity: warning }
+        annotations:
+          summary: "Mémoire JVM (heap) utilisée à plus de 90 %"

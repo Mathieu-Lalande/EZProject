@@ -11,7 +11,7 @@ import org.springframework.data.repository.query.Param;
 
 public interface TaskRepository extends JpaRepository<Task, Long> {
 
-    @EntityGraph(attributePaths = {"assignee", "project"})
+    @EntityGraph(attributePaths = {"assignee", "project", "labels"})
     List<Task> findByProjectIdOrderByPositionAsc(Long projectId);
 
     List<Task> findByProjectIdAndStatusOrderByPositionAsc(Long projectId, TaskStatus status);

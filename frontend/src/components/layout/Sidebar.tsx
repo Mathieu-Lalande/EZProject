@@ -1,6 +1,6 @@
 import { NavLink } from 'react-router-dom';
 import clsx from 'clsx';
-import { LayoutDashboard, UserRound, FolderKanban, Building2, Search, Moon, Sun, LogOut, X, PauseCircle } from 'lucide-react';
+import { LayoutDashboard, UserRound, FolderKanban, Building2, Search, Moon, Sun, LogOut, X, PauseCircle, Gauge, GanttChartSquare } from 'lucide-react';
 import { useLogout, useMe, useProjects } from '../../api/hooks';
 import { useTheme } from '../../lib/theme';
 import { planLabel, roleLabel } from '../../lib/labels';
@@ -22,8 +22,10 @@ export function Sidebar({ onSearch, mobileOpen, onNavigate }: SidebarProps) {
 
   const nav = [
     { to: '/portfolio', label: 'Portefeuille', icon: LayoutDashboard },
+    { to: '/roadmap', label: 'Roadmap', icon: GanttChartSquare },
     { to: '/me', label: 'Mon espace', icon: UserRound },
     { to: '/projects', label: 'Projets', icon: FolderKanban },
+    ...(me?.role !== 'GUEST' ? [{ to: '/capacity', label: 'Capacité', icon: Gauge }] : []),
     ...(me?.role !== 'GUEST' ? [{ to: '/organization', label: 'Organisation', icon: Building2 }] : []),
   ];
   const priorityRank = { P1: 0, P2: 1, P3: 2, P4: 3 } as const;
@@ -116,11 +118,13 @@ export function Sidebar({ onSearch, mobileOpen, onNavigate }: SidebarProps) {
 
         {me && (
           <div className="flex items-center gap-2.5 border-t border-line p-3">
-            <Avatar name={me.displayName} />
-            <div className="min-w-0 flex-1">
-              <div className="truncate text-sm font-medium">{me.displayName}</div>
-              <div className="truncate text-xs text-ink-3">{me.jobTitle ?? roleLabel[me.role]}</div>
-            </div>
+            <NavLink to="/account" onClick={onNavigate} className="flex min-w-0 flex-1 items-center gap-2.5 rounded-lg p-1 -m-1 hover:bg-surface-2" title="Mon compte">
+              <Avatar name={me.displayName} />
+              <div className="min-w-0 flex-1">
+                <div className="truncate text-sm font-medium">{me.displayName}</div>
+                <div className="truncate text-xs text-ink-3">{me.jobTitle ?? roleLabel[me.role]}</div>
+              </div>
+            </NavLink>
             <button onClick={toggleTheme} className="rounded-md p-1.5 text-ink-3 hover:bg-surface-2 hover:text-ink" aria-label="Changer de thème">
               {theme === 'dark' ? <Sun className="size-4" /> : <Moon className="size-4" />}
             </button>

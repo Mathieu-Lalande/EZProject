@@ -1,4 +1,4 @@
-import { CalendarClock, KanbanSquare, ListChecks, Spade } from 'lucide-react';
+import { CalendarClock, KanbanSquare, ListChecks, ShieldAlert, Spade, Timer } from 'lucide-react';
 import clsx from 'clsx';
 import type { ModuleType, Project } from '../../api/types';
 import { useUpdateModules } from '../../api/hooks';
@@ -10,6 +10,8 @@ const icons: Record<ModuleType, React.ReactNode> = {
   TODOS: <ListChecks className="size-5" />,
   RETRO_PLANNING: <CalendarClock className="size-5" />,
   POKER: <Spade className="size-5" />,
+  TIME_TRACKING: <Timer className="size-5" />,
+  RISKS: <ShieldAlert className="size-5" />,
 };
 
 /** Activation/désactivation des modules : rend chaque projet aussi léger ou complet que nécessaire. */

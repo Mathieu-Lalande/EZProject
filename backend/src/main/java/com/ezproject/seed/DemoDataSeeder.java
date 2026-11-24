@@ -16,7 +16,30 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigDecimal;
+
 import com.ezproject.access.ProjectMember;
+import com.ezproject.calendar.HolidayCalendar;
+import com.ezproject.capacity.Absence;
+import com.ezproject.capacity.AbsenceKind;
+import com.ezproject.capacity.AbsenceRepository;
+import com.ezproject.capacity.Allocation;
+import com.ezproject.capacity.AllocationRepository;
+import com.ezproject.time.TimeEntry;
+import com.ezproject.time.TimeEntryRepository;
+import com.ezproject.report.StatusReport;
+import com.ezproject.report.StatusReportRepository;
+import com.ezproject.report.Trend;
+import com.ezproject.risk.Decision;
+import com.ezproject.risk.DecisionRepository;
+import com.ezproject.risk.DecisionStatus;
+import com.ezproject.risk.Risk;
+import com.ezproject.risk.RiskRepository;
+import com.ezproject.risk.RiskStatus;
+import com.ezproject.task.collab.ChecklistItem;
+import com.ezproject.task.collab.ChecklistItemRepository;
+import com.ezproject.task.collab.TaskComment;
+import com.ezproject.task.collab.TaskCommentRepository;
 import com.ezproject.access.ProjectMemberRepository;
 import com.ezproject.access.ProjectRole;
 import com.ezproject.access.Visibility;
@@ -76,6 +99,37 @@ class DemoDataSeeder implements ApplicationRunner {
     private final Clock clock;
     private final String demoPassword;
     private String hash;
+    private TimeEntryRepository timeEntries;
+    private AllocationRepository allocations;
+    private AbsenceRepository absences;
+
+    private RiskRepository risks;
+    private DecisionRepository decisions;
+    private StatusReportRepository reports;
+
+    private TaskCommentRepository comments;
+    private ChecklistItemRepository checklist;
+
+    @org.springframework.beans.factory.annotation.Autowired
+    void setCollaborationRepositories(TaskCommentRepository comments, ChecklistItemRepository checklist) {
+        this.comments = comments;
+        this.checklist = checklist;
+    }
+
+    @org.springframework.beans.factory.annotation.Autowired
+    void setSteeringRepositories(RiskRepository risks, DecisionRepository decisions, StatusReportRepository reports) {
+        this.risks = risks;
+        this.decisions = decisions;
+        this.reports = reports;
+    }
+
+    @org.springframework.beans.factory.annotation.Autowired
+    void setCapacityRepositories(TimeEntryRepository timeEntries, AllocationRepository allocations,
+                                 AbsenceRepository absences) {
+        this.timeEntries = timeEntries;
+        this.allocations = allocations;
+        this.absences = absences;
+    }
 
     DemoDataSeeder(OrganizationRepository organizations, AppUserRepository users, TeamRepository teams,
                    TeamMembershipRepository teamMembers, ProjectRepository projects,
@@ -203,6 +257,67 @@ class DemoDataSeeder implements ApplicationRunner {
 
         poker.save(new PokerRound(portail, paiement, paiement.getTitle()));
 
+        paiement.relabel(java.util.Set.of("Back", "Paiement"));
+        int i = 0;
+        for (String step : List.of("Contrat d'intégration signé", "Bac à sable configuré", "Webhooks de confirmation", "Tests 3-D Secure")) {
+            ChecklistItem item = new ChecklistItem(paiement, step, i++);
+            item.update(step, i <= 2);
+            checklist.save(item);
+        }
+        comments.save(new TaskComment(paiement, lea, "Le client confirme la mise en production du paiement pour la V1."));
+        comments.save(new TaskComment(paiement, hugo, "Bac à sable OK, il reste les webhooks : estimation à faire au poker."));
+
+        // Temps passés (jours ouvrés passés) : PORTAIL dans les clous, AUDITSI consomme plus vite qu'il n'avance
+        logTime(portail, hugo, today, 30, "0.75");
+        logTime(portail, sarah, today, 30, "0.5");
+        logTime(mobile, hugo, today, 45, "0.25");
+        logTime(mobile, sarah, today, 60, "0.5");
+        logTime(audit, thomas, today, 12, "0.75");
+        logTime(audit, nina, today, 12, "1");
+        logTime(datalake, nina, today.minusDays(20), 10, "0.5");
+        logTime(manda, thomas, today, 5, "0.25");
+
+        // Staffing des 2 prochains mois : Hugo est surchargé (5,5 j/sem. pour 5 disponibles)
+        allocate(portail, hugo, today.minusWeeks(2), today.plusWeeks(8), "3");
+        allocate(mobile, hugo, today.minusWeeks(2), today.plusWeeks(4), "2.5");
+        allocate(portail, sarah, today.minusWeeks(2), today.plusWeeks(8), "2.5");
+        allocate(mobile, sarah, today.minusWeeks(2), today.plusWeeks(4), "2");
+        allocate(audit, thomas, today.minusWeeks(2), today.plusWeeks(4), "3");
+        allocate(manda, thomas, today.minusWeeks(1), today.plusWeeks(4), "1.5");
+        allocate(audit, nina, today.minusWeeks(2), today.plusWeeks(4), "4");
+        allocate(manda, camille, today.minusWeeks(1), today.plusWeeks(4), "1");
+        nina.changeCapacity(new BigDecimal("4"));
+
+        risk(mobile, "Synchronisation hors-ligne instable sur les vieux terminaux", 4, 4, RiskStatus.OPEN, hugo,
+                "Banc de test sur 5 modèles, plan B : mode connecté dégradé", today.plusDays(7));
+        risk(mobile, "Retard de validation des stores", 2, 3, RiskStatus.OPEN, sarah, "Soumission anticipée d'une bêta", null);
+        risk(portail, "Délai d'homologation du prestataire de paiement", 2, 3, RiskStatus.MITIGATING, hugo,
+                "Environnement bac à sable obtenu, relance hebdomadaire", today.plusDays(10));
+        risk(audit, "Faible disponibilité des métiers pour les entretiens", 3, 3, RiskStatus.OPEN, thomas,
+                "Créneaux réservés via la DSI, ateliers groupés", today.plusDays(5));
+        risk(audit, "Périmètre applicatif sous-estimé", 2, 2, RiskStatus.CLOSED, nina, "Cartographie complétée", null);
+
+        decision(mobile, "Signature électronique reportée en V2", "COPIL", today.minusDays(14), DecisionStatus.APPROVED, lea);
+        decision(portail, "Choix du prestataire de paiement", "Comité client", today.minusDays(30), DecisionStatus.APPROVED, lea);
+        decision(audit, "Élargir le diagnostic aux filiales", "Sponsor client", null, DecisionStatus.PROPOSED, thomas);
+
+        reports.save(new StatusReport(portail, lea, today.minusDays(21), Health.AMBER, Trend.STABLE,
+                "Démarrage du développement, environnement de paiement en attente.", null, null, null));
+        reports.save(new StatusReport(portail, lea, today.minusDays(7), Health.GREEN, Trend.UP,
+                "Authentification livrée, intégration du paiement en cours.", "API OAuth2 en recette",
+                "Finaliser le paiement, tests de charge", null));
+        reports.save(new StatusReport(mobile, hugo, today.minusDays(20), Health.RED, Trend.DOWN,
+                "La synchronisation hors-ligne bloque la recette terrain.", null, "Banc de test terminaux",
+                "Arbitrage staffing nécessaire"));
+        reports.save(new StatusReport(audit, thomas, today.minusDays(3), Health.AMBER, Trend.STABLE,
+                "Entretiens terminés, cartographie en cours ; consommation du budget à surveiller.",
+                "12 entretiens réalisés", "Ateliers de restitution intermédiaire", "Budget consommé plus vite que prévu"));
+
+        absences.save(new Absence(sarah, today.plusWeeks(1).with(java.time.DayOfWeek.MONDAY),
+                today.plusWeeks(1).with(java.time.DayOfWeek.WEDNESDAY), AbsenceKind.VACATION, "Congés"));
+        absences.save(new Absence(thomas, today.plusWeeks(2).with(java.time.DayOfWeek.THURSDAY),
+                today.plusWeeks(2).with(java.time.DayOfWeek.FRIDAY), AbsenceKind.TRAINING, "Formation TOGAF"));
+
         // Second locataire : ses données ne doivent jamais être visibles depuis Horizon Conseil
         Organization acme = organizations.save(new Organization("Acme Industries", "acme", Plan.FREE));
         AppUser bob = user(acme, "bob", "Bob Durand", Role.OWNER, "Directeur de projet");
@@ -214,6 +329,35 @@ class DemoDataSeeder implements ApplicationRunner {
         task(erp, new EnumMap<>(TaskStatus.class), "Reprise des données articles", TaskStatus.TODO, Priority.HIGH, bob, 8, today.plusDays(12));
 
         log.info("Données de démonstration créées : Horizon Conseil (*@ezproject.local) et Acme Industries (bob@acme.local)");
+    }
+
+    private void risk(Project project, String title, int probability, int impact, RiskStatus status, AppUser owner,
+                      String mitigation, LocalDate due) {
+        Risk r = new Risk(project);
+        r.update(title, null, probability, impact, status, owner, mitigation, due);
+        risks.save(r);
+    }
+
+    private void decision(Project project, String title, String by, LocalDate on, DecisionStatus status, AppUser author) {
+        Decision d = new Decision(project, author);
+        d.update(title, null, on, by, status);
+        decisions.save(d);
+    }
+
+    private void logTime(Project project, AppUser user, LocalDate until, int workingDays, String days) {
+        LocalDate d = until.minusDays(1);
+        int logged = 0;
+        while (logged < workingDays) {
+            if (HolidayCalendar.FR.isWorkingDay(d)) {
+                timeEntries.save(new TimeEntry(project, null, user, d, new BigDecimal(days), null));
+                logged++;
+            }
+            d = d.minusDays(1);
+        }
+    }
+
+    private void allocate(Project project, AppUser user, LocalDate start, LocalDate end, String perWeek) {
+        allocations.save(new Allocation(project, user, start, end, new BigDecimal(perWeek)));
     }
 
     private AppUser user(Organization org, String login, String name, Role role, String jobTitle) {

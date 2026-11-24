@@ -1,5 +1,7 @@
 import { Navigate, NavLink, useParams } from 'react-router-dom';
-import { Building2, FileSpreadsheet, KeyRound, Users, UsersRound } from 'lucide-react';
+import { Building2, FileSpreadsheet, KeyRound, ScrollText, Users, UsersRound } from 'lucide-react';
+import { AuditTab } from '../features/organization/AuditTab';
+import { isAdmin } from '../lib/permissions';
 import clsx from 'clsx';
 import { useMe } from '../api/hooks';
 import { PageHeader } from '../components/ui/PageHeader';
@@ -17,6 +19,7 @@ const TABS = [
   { id: 'teams', label: 'Équipes', icon: <UsersRound className="size-4" /> },
   { id: 'permissions', label: 'Rôles & permissions', icon: <KeyRound className="size-4" /> },
   { id: 'data', label: 'Import / export', icon: <FileSpreadsheet className="size-4" /> },
+  { id: 'audit', label: 'Journal d’audit', icon: <ScrollText className="size-4" />, adminOnly: true },
 ];
 
 export function OrganizationPage() {
@@ -24,7 +27,8 @@ export function OrganizationPage() {
   const { data: me } = useMe();
   // Un invité n'a pas accès à l'administration de l'organisation
   if (me?.role === 'GUEST') return <Navigate to="/me" replace />;
-  if (!TABS.some((t) => t.id === tab)) return <Navigate to="/organization" replace />;
+  const tabs = TABS.filter((t) => !('adminOnly' in t) || isAdmin(me));
+  if (!tabs.some((t) => t.id === tab)) return <Navigate to="/organization" replace />;
 
   return (
     <div className="animate-fade-in">
@@ -33,7 +37,7 @@ export function OrganizationPage() {
         subtitle="Membres, équipes, droits d'accès et reprise de vos données."
       />
       <nav className="scrollbar-thin mb-6 flex gap-1 overflow-x-auto border-b border-line">
-        {TABS.map((t) => (
+        {tabs.map((t) => (
           <NavLink key={t.id} end to={t.id === 'general' ? '/organization' : `/organization/${t.id}`}
             className={({ isActive }) => clsx('-mb-px flex items-center gap-2 border-b-2 px-3 py-2.5 text-sm font-medium whitespace-nowrap transition',
               isActive ? 'border-brand-600 text-ink' : 'border-transparent text-ink-3 hover:text-ink')}>
@@ -46,6 +50,7 @@ export function OrganizationPage() {
       {tab === 'teams' && <TeamsTab />}
       {tab === 'permissions' && <PermissionsTab />}
       {tab === 'data' && <ImportExportTab />}
+      {tab === 'audit' && <AuditTab />}
     </div>
   );
 }

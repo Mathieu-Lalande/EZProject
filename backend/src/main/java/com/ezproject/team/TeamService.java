@@ -11,6 +11,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.ezproject.access.ProjectRole;
+import com.ezproject.audit.AuditService;
 import com.ezproject.common.BusinessRuleException;
 import com.ezproject.common.NotFoundException;
 import com.ezproject.security.CurrentUser;
@@ -26,9 +27,11 @@ public class TeamService {
     private final TeamMembershipRepository memberships;
     private final UserService userService;
     private final CurrentUser currentUser;
+    private final AuditService audit;
 
     public TeamService(TeamRepository teams, TeamMembershipRepository memberships, UserService userService,
-                       CurrentUser currentUser) {
+                       CurrentUser currentUser, AuditService audit) {
+        this.audit = audit;
         this.teams = teams;
         this.memberships = memberships;
         this.userService = userService;
@@ -63,6 +66,7 @@ public class TeamService {
             throw new BusinessRuleException("Une équipe porte déjà ce nom");
         }
         Team team = teams.save(new Team(me.getOrganization(), request.name(), request.description(), color(request)));
+        audit.record("TEAM_CREATED", "TEAM", team.getId(), "Création de l'équipe " + team.getName());
         return toDto(team, List.of(), me);
     }
 
@@ -75,6 +79,7 @@ public class TeamService {
                 .filter(other -> !other.getId().equals(teamId))
                 .ifPresent(other -> { throw new BusinessRuleException("Une équipe porte déjà ce nom"); });
         team.update(request.name(), request.description(), color(request));
+        audit.record("TEAM_UPDATED", "TEAM", teamId, "Modification de l'équipe " + team.getName());
         return reload(team, me);
     }
 
@@ -82,7 +87,9 @@ public class TeamService {
     public void delete(Long teamId) {
         AppUser me = currentUser.get();
         requireOrgManager(me);
-        teams.delete(getInOrganization(teamId, me.getOrganization().getId()));
+        Team team = getInOrganization(teamId, me.getOrganization().getId());
+        audit.record("TEAM_DELETED", "TEAM", teamId, "Suppression de l'équipe " + team.getName());
+        teams.delete(team);
     }
 
     @Transactional
@@ -94,6 +101,10 @@ public class TeamService {
         if (user.getRole() == Role.GUEST) {
             throw new BusinessRuleException("Un invité ne peut pas rejoindre une équipe : ajoutez-le directement aux projets");
         }
+        if (!user.isActive()) {
+            throw new BusinessRuleException("Ce compte est désactivé");
+        }
+        audit.record("TEAM_MEMBER", "TEAM", teamId, user.getDisplayName() + " → " + role + " dans " + team.getName());
         memberships.findByTeamIdAndUserId(teamId, userId)
                 .ifPresentOrElse(m -> m.changeRole(role), () -> memberships.save(new TeamMembership(team, user, role)));
         return reload(team, me);
@@ -104,7 +115,10 @@ public class TeamService {
         AppUser me = currentUser.get();
         Team team = getInOrganization(teamId, me.getOrganization().getId());
         requireCanManage(me, team);
-        memberships.findByTeamIdAndUserId(teamId, userId).ifPresent(memberships::delete);
+        memberships.findByTeamIdAndUserId(teamId, userId).ifPresent(m -> {
+            audit.record("TEAM_MEMBER_REMOVED", "TEAM", teamId, m.getUser().getDisplayName() + " retiré de " + team.getName());
+            memberships.delete(m);
+        });
         memberships.flush();
         return reload(team, me);
     }
