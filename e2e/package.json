@@ -6,6 +6,6 @@
     "ui": "node ui_smoke.cjs"
   },
   "devDependencies": {
-    "playwright": "1.63.0"
+    "playwright": "1.65.1"
   }
 }
