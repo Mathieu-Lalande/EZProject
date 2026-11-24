@@ -129,8 +129,10 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
+  # Nécessite « Dependency graph » activé (Settings > Code security), puis la variable
+  # de dépôt DEPENDENCY_REVIEW=true (Settings > Secrets and variables > Actions > Variables).
   dependency-review:
-    if: github.event_name == 'pull_request'
+    if: github.event_name == 'pull_request' && vars.DEPENDENCY_REVIEW == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

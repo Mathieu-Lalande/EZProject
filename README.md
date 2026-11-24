@@ -139,7 +139,7 @@ La **CI** (GitHub Actions) enchaîne :
 - les tests et le build du frontend ;
 - les tests de bout en bout sur le jar et PostgreSQL 16 (RLS actif), parcours API puis navigateur ;
 - la construction de l'image Docker ;
-- la revue des dépendances des PR.
+- la revue des dépendances des PR (optionnelle : activer « Dependency graph » dans les réglages du dépôt puis la variable Actions `DEPENDENCY_REVIEW=true`).
 
 Elle est complétée par **CodeQL** (Java et TypeScript) et **Dependabot**.
 
