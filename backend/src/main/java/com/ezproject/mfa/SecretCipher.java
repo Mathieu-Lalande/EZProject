@@ -1,6 +1,6 @@
 package com.ezproject.mfa;
 
-import java.nio.ByteBuffer;
+import java.io.ByteArrayOutputStream;
 import java.nio.charset.StandardCharsets;
 import java.security.GeneralSecurityException;
 import java.security.SecureRandom;
@@ -23,6 +23,7 @@ import com.ezproject.common.BusinessRuleException;
 @Component
 public class SecretCipher {
 
+    private static final int IV_LENGTH = 12;
     private static final SecureRandom RANDOM = new SecureRandom();
     private final SecretKeySpec key;
 
@@ -45,12 +46,15 @@ public class SecretCipher {
     public String encrypt(String plain) {
         requireKey();
         try {
-            byte[] iv = new byte[12];
+            byte[] iv = new byte[IV_LENGTH];
             RANDOM.nextBytes(iv);
             Cipher cipher = Cipher.getInstance("AES/GCM/NoPadding");
             cipher.init(Cipher.ENCRYPT_MODE, key, new GCMParameterSpec(128, iv));
             byte[] ct = cipher.doFinal(plain.getBytes(StandardCharsets.UTF_8));
-            return Base64.getEncoder().encodeToString(ByteBuffer.allocate(iv.length + ct.length).put(iv).put(ct).array());
+            ByteArrayOutputStream out = new ByteArrayOutputStream();
+            out.writeBytes(iv);
+            out.writeBytes(ct);
+            return Base64.getEncoder().encodeToString(out.toByteArray());
         } catch (GeneralSecurityException e) {
             throw new IllegalStateException("Chiffrement impossible", e);
         }
@@ -60,9 +64,12 @@ public class SecretCipher {
         requireKey();
         try {
             byte[] all = Base64.getDecoder().decode(encoded);
+            if (all.length <= IV_LENGTH) {
+                throw new IllegalStateException("Secret chiffré invalide");
+            }
             Cipher cipher = Cipher.getInstance("AES/GCM/NoPadding");
-            cipher.init(Cipher.DECRYPT_MODE, key, new GCMParameterSpec(128, all, 0, 12));
-            return new String(cipher.doFinal(all, 12, all.length - 12), StandardCharsets.UTF_8);
+            cipher.init(Cipher.DECRYPT_MODE, key, new GCMParameterSpec(128, all, 0, IV_LENGTH));
+            return new String(cipher.doFinal(all, IV_LENGTH, all.length - IV_LENGTH), StandardCharsets.UTF_8);
         } catch (GeneralSecurityException e) {
             throw new IllegalStateException("Déchiffrement impossible (clé MFA changée ?)", e);
         }
